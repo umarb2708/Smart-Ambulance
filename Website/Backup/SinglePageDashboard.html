@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Ambulance Dashboard</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      background-color: #000000;
+      color: #ffffff;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .dashboard {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header {
+      margin-bottom: 30px;
+    }
+
+    .header-title {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      margin-bottom: 20px;
+    }
+
+    .patient-selector {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      background-color: #2b2b2b;
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+    }
+
+    .patient-selector label {
+      font-size: 16px;
+      font-weight: 600;
+      color: #d0d0d0;
+    }
+
+    .patient-selector select {
+      flex: 1;
+      max-width: 400px;
+      padding: 12px 15px;
+      font-size: 15px;
+      background-color: #1a1a1a;
+      color: #ffffff;
+      border: 2px solid #3d3d3d;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .patient-selector select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .refresh-indicator {
+      font-size: 12px;
+      color: #a0a0a0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 15px 20px;
+      background-color: #2b2b2b;
+      border-radius: 10px;
+    }
+
+    .pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: #2ecc71;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #d0d0d0;
+      margin: 30px 0 15px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      background-color: #2b2b2b;
+      border-radius: 10px;
+      padding: 16px 18px;
+      box-shadow: 0 0 0 1px #3d3d3d;
+      position: relative;
+    }
+
+    .card.read-only {
+      border-left: 3px solid #667eea;
+    }
+
+    .card.editable {
+      border-left: 3px solid #2ecc71;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .card-title {
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #d0d0d0;
+    }
+
+    .edit-btn {
+      background-color: transparent;
+      border: 1px solid #2ecc71;
+      color: #2ecc71;
+      padding: 4px 12px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .edit-btn:hover {
+      background-color: #2ecc71;
+      color: #000;
+    }
+
+    .save-btn {
+      background-color: #2ecc71;
+      border: none;
+      color: #000;
+      padding: 4px 12px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .cancel-btn {
+      background-color: transparent;
+      border: 1px solid #e74c3c;
+      color: #e74c3c;
+      padding: 4px 12px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-left: 5px;
+    }
+
+    .status-badge {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 500;
+    }
+
+    .status-normal {
+      background-color: rgba(46, 204, 113, 0.15);
+      color: #2ecc71;
+      border: 1px solid rgba(46, 204, 113, 0.5);
+    }
+
+    .status-high {
+      background-color: rgba(241, 196, 15, 0.15);
+      color: #f1c40f;
+      border: 1px solid rgba(241, 196, 15, 0.5);
+    }
+
+    .status-low {
+      background-color: rgba(231, 76, 60, 0.15);
+      color: #e74c3c;
+      border: 1px solid rgba(231, 76, 60, 0.5);
+    }
+
+    .card-value {
+      font-size: 26px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #ffffff;
+    }
+
+    .card-input {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 20px;
+      font-weight: 600;
+      background-color: #1a1a1a;
+      color: #ffffff;
+      border: 2px solid #667eea;
+      border-radius: 6px;
+      margin-bottom: 4px;
+    }
+
+    .card-select {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 20px;
+      font-weight: 600;
+      background-color: #1a1a1a;
+      color: #ffffff;
+      border: 2px solid #667eea;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .card-subtext {
+      font-size: 12px;
+      color: #a0a0a0;
+    }
+
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .loading-overlay.hidden {
+      display: none;
+    }
+
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .no-data {
+      text-align: center;
+      padding: 60px 20px;
+      color: #666;
+      font-size: 16px;
+    }
+
+    @media (max-width: 900px) {
+      .grid-3 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 700px) {
+      .grid-3,
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+  </div>
+
+  <div class="dashboard">
+    <header class="header">
+      <h1 class="header-title">Smart Ambulance Dashboard</h1>
+      
+      <div class="patient-selector">
+        <label for="patientSelect">Select Patient:</label>
+        <select id="patientSelect" onchange="loadPatientData()">
+          <option value="">-- Choose Patient ID --</option>
+        </select>
+      </div>
+
+      <div class="refresh-indicator">
+        <span class="pulse"></span>
+        <span>Auto-refreshing every 10 seconds</span>
+      </div>
+    </header>
+
+    <div id="dashboardContent" class="no-data">
+      Please select a patient from the dropdown above
+    </div>
+  </div>
+
+  <script>
+    var currentPatientID = null;
+    var refreshInterval = null;
+    var patientData = {};
+    var allPatientsData = {}; // Prefetched cache
+
+    // Load on page load
+    window.addEventListener('load', function() {
+      document.getElementById('loadingOverlay').classList.add('hidden');
+      loadActivePatients();
+    });
+
+    // Load active patients and prefetch all data (Done != 1)
+    function loadActivePatients() {
+      console.log('loadActivePatients() called');
+      
+      // Check if function exists
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        console.log('google.script.run is available');
+        
+        google.script.run
+          .withSuccessHandler(function(result) {
+            console.log('Received result:', result);
+            console.log('Result type:', typeof result);
+            
+            if (!result) {
+              console.error('Result is null or undefined - Function may not exist in deployed script!');
+              alert('Error: The server function "getAllActivePatientsData" returned null.\n\nPlease ensure you have:\n1. Updated your .gs file with the new function\n2. Redeployed the web app with a NEW VERSION\n3. Refreshed this page');
+              return;
+            }
+            if (result.error) {
+              console.error('Error in result:', result.error);
+              alert('Error loading patients: ' + result.error);
+              return;
+            }
+            
+            // Store prefetched data
+            allPatientsData = result.patients || {};
+            console.log('Prefetched data for ' + Object.keys(allPatientsData).length + ' patients');
+            console.log('Patient IDs:', Object.keys(allPatientsData));
+            
+            var select = document.getElementById('patientSelect');
+            select.innerHTML = '<option value="">-- Choose Patient ID --</option>';
+            
+            var patientIDs = Object.keys(allPatientsData);
+            if (patientIDs.length === 0) {
+              console.warn('No active patients found');
+              select.innerHTML += '<option value="" disabled>No active patients found</option>';
+              return;
+            }
+            
+            patientIDs.forEach(function(patientID) {
+              var patient = allPatientsData[patientID];
+              var option = document.createElement('option');
+              option.value = patientID;
+              option.textContent = patientID + ' - ' + (patient.patientName || 'No Name');
+              select.appendChild(option);
+            });
+            
+            console.log('Successfully loaded ' + patientIDs.length + ' patients into dropdown');
+          })
+          .withFailureHandler(function(error) {
+            console.error('Error loading patients:', error);
+            alert('Error loading patients: ' + (error && error.message ? error.message : 'Unknown error'));
+            var select = document.getElementById('patientSelect');
+            select.innerHTML = '<option value="">Error loading patients</option>';
+          })
+          .getAllActivePatientsData();
+      } else {
+        console.error('google.script.run not available!');
+        alert('Error: This page must be run as a Google Apps Script web app');
+      }
+    }
+
+    // Load patient data from prefetched cache
+    function loadPatientData() {
+      var patientID = document.getElementById('patientSelect').value;
+      
+      if (!patientID) {
+        document.getElementById('dashboardContent').innerHTML = 
+          '<div class="no-data">Please select a patient from the dropdown above</div>';
+        currentPatientID = null;
+        stopAutoRefresh();
+        return;
+      }
+
+      currentPatientID = patientID;
+      
+      // Load immediately from cache
+      var data = allPatientsData[patientID];
+      
+      if (!data) {
+        alert('Error: Patient data not found in cache');
+        document.getElementById('dashboardContent').innerHTML = 
+          '<div class="no-data">Patient not found</div>';
+        return;
+      }
+      
+      patientData = data;
+      renderDashboard(data);
+      startAutoRefresh();
+    }
+
+    // Render dashboard
+    function renderDashboard(data) {
+      var html = `
+        <div class="section-title">Real-Time Vitals (Read-Only)</div>
+        <section class="grid-3">
+          <div class="card read-only">
+            <div class="card-header">
+              <div class="card-title">Body Temperature</div>
+              <span class="status-badge status-${(data.tempStatus || 'normal').toLowerCase()}">${data.tempStatus || 'Normal'}</span>
+            </div>
+            <div class="card-value">${(data.temperature && data.temperature > 0) ? parseFloat(data.temperature).toFixed(1) + '°C' : 'Not Updated'}</div>
+            <div class="card-subtext">From MLX90614 sensor</div>
+          </div>
+
+          <div class="card read-only">
+            <div class="card-header">
+              <div class="card-title">Heart Rate</div>
+              <span class="status-badge status-${(data.heartRateStatus || 'normal').toLowerCase()}">${data.heartRateStatus || 'Normal'}</span>
+            </div>
+            <div class="card-value">${(data.heartRate && data.heartRate > 0) ? data.heartRate + ' BPM' : 'Not Updated'}</div>
+            <div class="card-subtext">From MAX30102 sensor</div>
+          </div>
+
+          <div class="card read-only">
+            <div class="card-header">
+              <div class="card-title">Oxygen Level</div>
+              <span class="status-badge status-${(data.oxygenStatus || 'normal').toLowerCase()}">${data.oxygenStatus || 'Normal'}</span>
+            </div>
+            <div class="card-value">${(data.oxygenLevel && data.oxygenLevel > 0) ? data.oxygenLevel + '%' : 'Not Updated'}</div>
+            <div class="card-subtext">SpO₂ from MAX30102</div>
+          </div>
+        </section>
+
+        <div class="section-title">Patient Information (Editable)</div>
+        <section class="grid-2">
+          ${renderEditableCard('patientName', 'Patient Name', data.patientName || 'Not Updated', 'text')}
+          ${renderEditableCard('patientAge', 'Age', data.patientAge || 'Not Updated', 'number')}
+          ${renderEditableCard('bloodGroup', 'Blood Group', data.bloodGroup || 'Not Updated', 'select', ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])}
+          ${renderEditableCard('patientStatus', 'Patient Status', data.patientStatus || 'Not Updated', 'select', ['Normal', 'Medium', 'Critical'])}
+        </section>
+
+        <div class="section-title">Medical Data (Editable)</div>
+        <section class="grid-2">
+          ${renderEditableCard('bloodPressure', 'Blood Pressure', data.bloodPressure || 'Not Updated', 'text')}
+          ${renderEditableCard('diabeticsLevel', 'Blood Sugar Level', data.diabeticsLevel || 'Not Updated', 'number', null, 'mg/dL')}
+        </section>
+
+        <div class="section-title">Ambulance Details (Editable)</div>
+        <section class="grid-2">
+          ${renderEditableCard('ambulanceID', 'Ambulance ID', data.ambulanceID || 'Not Updated', 'text')}
+          ${renderEditableCard('hospital', 'Destination Hospital', data.hospital || 'Not Updated', 'select', ['Hospital 1', 'Hospital 2', 'Hospital 3', 'Hospital 4'])}
+        </section>
+
+        <div class="card-subtext" style="text-align: center; margin-top: 20px; padding: 10px;">
+          Last updated: ${data.date ? new Date(data.date).toLocaleString() : 'Not Updated'}
+        </div>
+      `;
+
+      document.getElementById('dashboardContent').innerHTML = html;
+    }
+
+    // Render editable card
+    function renderEditableCard(fieldName, title, value, inputType, options, unit) {
+      var displayValue = value;
+      if (unit) displayValue += ' ' + unit;
+
+      return `
+        <div class="card editable" id="card-${fieldName}">
+          <div class="card-header">
+            <div class="card-title">${title}</div>
+            <button class="edit-btn" onclick="editField('${fieldName}')">EDIT</button>
+          </div>
+          <div class="card-value" id="value-${fieldName}">${displayValue}</div>
+          <div class="card-subtext">Click EDIT to modify</div>
+        </div>
+      `;
+    }
+
+    // Edit field
+    function editField(fieldName) {
+      var card = document.getElementById('card-' + fieldName);
+      var currentValue = patientData[fieldName] || '';
+      
+      var inputHTML = '';
+      
+      if (fieldName === 'bloodGroup') {
+        inputHTML = `
+          <select class="card-select" id="input-${fieldName}">
+            <option value="">Select...</option>
+            <option value="A+" ${currentValue === 'A+' ? 'selected' : ''}>A+</option>
+            <option value="A-" ${currentValue === 'A-' ? 'selected' : ''}>A-</option>
+            <option value="B+" ${currentValue === 'B+' ? 'selected' : ''}>B+</option>
+            <option value="B-" ${currentValue === 'B-' ? 'selected' : ''}>B-</option>
+            <option value="AB+" ${currentValue === 'AB+' ? 'selected' : ''}>AB+</option>
+            <option value="AB-" ${currentValue === 'AB-' ? 'selected' : ''}>AB-</option>
+            <option value="O+" ${currentValue === 'O+' ? 'selected' : ''}>O+</option>
+            <option value="O-" ${currentValue === 'O-' ? 'selected' : ''}>O-</option>
+          </select>
+        `;
+      } else if (fieldName === 'patientStatus') {
+        inputHTML = `
+          <select class="card-select" id="input-${fieldName}">
+            <option value="">Select...</option>
+            <option value="Normal" ${currentValue === 'Normal' ? 'selected' : ''}>Normal</option>
+            <option value="Medium" ${currentValue === 'Medium' ? 'selected' : ''}>Medium</option>
+            <option value="Critical" ${currentValue === 'Critical' ? 'selected' : ''}>Critical</option>
+          </select>
+        `;
+      } else if (fieldName === 'hospital') {
+        inputHTML = `
+          <select class="card-select" id="input-${fieldName}">
+            <option value="">Select...</option>
+            <option value="Hospital 1" ${currentValue === 'Hospital 1' ? 'selected' : ''}>Hospital 1</option>
+            <option value="Hospital 2" ${currentValue === 'Hospital 2' ? 'selected' : ''}>Hospital 2</option>
+            <option value="Hospital 3" ${currentValue === 'Hospital 3' ? 'selected' : ''}>Hospital 3</option>
+            <option value="Hospital 4" ${currentValue === 'Hospital 4' ? 'selected' : ''}>Hospital 4</option>
+          </select>
+        `;
+      } else {
+        var inputTypeAttr = fieldName === 'patientAge' || fieldName === 'diabeticsLevel' ? 'number' : 'text';
+        inputHTML = `<input type="${inputTypeAttr}" class="card-input" id="input-${fieldName}" value="${currentValue}">`;
+      }
+
+      card.innerHTML = `
+        <div class="card-header">
+          <div class="card-title">${card.querySelector('.card-title').textContent}</div>
+          <div>
+            <button class="save-btn" onclick="saveField('${fieldName}')">SAVE</button>
+            <button class="cancel-btn" onclick="cancelEdit('${fieldName}')">CANCEL</button>
+          </div>
+        </div>
+        ${inputHTML}
+        <div class="card-subtext">Editing mode</div>
+      `;
+
+      document.getElementById('input-' + fieldName).focus();
+    }
+
+    // Save field
+    function saveField(fieldName) {
+      var newValue = document.getElementById('input-' + fieldName).value;
+      
+      if (!newValue) {
+        alert('Please enter a value');
+        return;
+      }
+
+      document.getElementById('loadingOverlay').classList.remove('hidden');
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            patientData[fieldName] = newValue;
+            renderDashboard(patientData);
+          } else {
+            alert('Error: ' + result.message);
+          }
+          document.getElementById('loadingOverlay').classList.add('hidden');
+        })
+        .withFailureHandler(function(error) {
+          alert('Error saving: ' + error.message);
+          document.getElementById('loadingOverlay').classList.add('hidden');
+        })
+        .updatePatientField(currentPatientID, fieldName, newValue);
+    }
+
+    // Cancel edit
+    function cancelEdit(fieldName) {
+      renderDashboard(patientData);
+    }
+
+    // Auto refresh - reload all patient data
+    function startAutoRefresh() {
+      stopAutoRefresh();
+      refreshInterval = setInterval(function() {
+        console.log('Auto-refreshing all patient data...');
+        google.script.run
+          .withSuccessHandler(function(result) {
+            if (!result || result.error) {
+              console.error('Error during auto-refresh:', result ? result.error : 'No response');
+              return;
+            }
+            
+            // Update cache
+            allPatientsData = result.patients || {};
+            console.log('Refreshed data for ' + Object.keys(allPatientsData).length + ' patients');
+            
+            // If a patient is selected, refresh their display
+            if (currentPatientID) {
+              var data = allPatientsData[currentPatientID];
+              if (data) {
+                patientData = data;
+                renderDashboard(data);
+              } else {
+                // Patient may have been marked as Done
+                document.getElementById('dashboardContent').innerHTML = 
+                  '<div class="no-data" style="color: #e74c3c;">This patient is no longer active</div>';
+                currentPatientID = null;
+                loadActivePatients(); // Reload dropdown
+              }
+            }
+          })
+          .withFailureHandler(function(error) {
+            console.error('Auto-refresh failed:', error);
+          })
+          .getAllActivePatientsData();
+      }, 10000);
+    }
+
+    function stopAutoRefresh() {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+      }
+    }
+
+    window.addEventListener('beforeunload', stopAutoRefresh);
+  </script>
+</body>
+</html>

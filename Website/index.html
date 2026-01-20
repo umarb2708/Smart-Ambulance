@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Ambulance Dashboard</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="loading-overlay hidden" id="loadingOverlay">
+    <div class="spinner"></div>
+  </div>
+
+  <div class="dashboard">
+    <header class="header">
+      <h1 class="header-title">🚑 Smart Ambulance Dashboard</h1>
+      
+      <div class="patient-selector">
+        <label for="patientSelect">Select Patient:</label>
+        <select id="patientSelect" onchange="loadPatientData()">
+          <option value="">-- Choose Patient ID --</option>
+        </select>
+      </div>
+
+      <div class="refresh-indicator">
+        <span class="pulse"></span>
+        <span>Auto-refreshing every 10 seconds</span>
+      </div>
+    </header>
+
+    <div id="dashboardContent" class="no-data">
+      Please select a patient from the dropdown above
+    </div>
+  </div>
+
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

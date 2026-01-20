@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Test - Smart Ambulance</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 3px solid #667eea;
+      padding-bottom: 10px;
+    }
+    .test-section {
+      background: white;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+      margin: 5px;
+    }
+    button:hover {
+      background: #5568d3;
+    }
+    .output {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      padding: 15px;
+      margin-top: 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .success { color: #28a745; font-weight: bold; }
+    .error { color: #dc3545; font-weight: bold; }
+    .status {
+      display: inline-block;
+      padding: 5px 10px;
+      border-radius: 3px;
+      margin: 5px 0;
+      font-size: 12px;
+    }
+    .status.ok { background: #d4edda; color: #155724; }
+    .status.fail { background: #f8d7da; color: #721c24; }
+    input, select {
+      padding: 8px;
+      margin: 5px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧪 Smart Ambulance API Test Suite</h1>
+  
+  <div class="test-section">
+    <h2>1. Test Database Connection</h2>
+    <button onclick="testConnection()">Test Connection</button>
+    <div id="connectionOutput" class="output"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>2. Get All Active Patients</h2>
+    <button onclick="getPatients()">Get Patients</button>
+    <div id="patientsOutput" class="output"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>3. Simulate ESP32 Upload</h2>
+    <label>Patient ID: <input type="text" id="uploadPatientID" value="P999"></label>
+    <label>Temperature: <input type="number" id="uploadTemp" value="37.5" step="0.1"></label>
+    <label>O2 Level: <input type="number" id="uploadO2" value="98"></label>
+    <label>Heart Rate: <input type="number" id="uploadHR" value="75"></label>
+    <br>
+    <button onclick="simulateUpload()">Simulate Upload</button>
+    <div id="uploadOutput" class="output"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>4. Update Patient Field</h2>
+    <label>Patient ID: <input type="text" id="updatePatientID" value="P001"></label>
+    <label>Field: 
+      <select id="updateField">
+        <option value="patientName">Patient Name</option>
+        <option value="patientAge">Age</option>
+        <option value="bloodGroup">Blood Group</option>
+        <option value="patientStatus">Status</option>
+        <option value="bloodPressure">Blood Pressure</option>
+        <option value="hospital">Hospital</option>
+      </select>
+    </label>
+    <label>New Value: <input type="text" id="updateValue" value="Test Value"></label>
+    <br>
+    <button onclick="updatePatient()">Update Field</button>
+    <div id="updateOutput" class="output"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>5. System Status</h2>
+    <button onclick="checkSystemStatus()">Check All</button>
+    <div id="statusOutput" class="output"></div>
+  </div>
+
+  <script>
+    const API_BASE = 'api/';
+
+    function log(elementId, message, isError = false) {
+      const output = document.getElementById(elementId);
+      const timestamp = new Date().toLocaleTimeString();
+      const className = isError ? 'error' : 'success';
+      output.innerHTML = `[${timestamp}] <span class="${className}">${message}</span>\n\n` + output.innerHTML;
+    }
+
+    function logJSON(elementId, data) {
+      const output = document.getElementById(elementId);
+      output.innerHTML = JSON.stringify(data, null, 2);
+    }
+
+    async function testConnection() {
+      log('connectionOutput', 'Testing database connection...');
+      try {
+        const response = await fetch(API_BASE + 'get_patients.php');
+        const data = await response.json();
+        
+        if (data.error) {
+          log('connectionOutput', '❌ Connection Failed: ' + data.error, true);
+        } else {
+          log('connectionOutput', '✅ Connection Successful!');
+          log('connectionOutput', `Found ${data.count || 0} active patients`);
+        }
+        logJSON('connectionOutput', data);
+      } catch (error) {
+        log('connectionOutput', '❌ Error: ' + error.message, true);
+      }
+    }
+
+    async function getPatients() {
+      log('patientsOutput', 'Fetching active patients...');
+      try {
+        const response = await fetch(API_BASE + 'get_patients.php');
+        const data = await response.json();
+        
+        if (data.error) {
+          log('patientsOutput', '❌ Error: ' + data.error, true);
+        } else {
+          const count = Object.keys(data.patients || {}).length;
+          log('patientsOutput', `✅ Retrieved ${count} patients`);
+          
+          // Display patient summary
+          for (const [id, patient] of Object.entries(data.patients || {})) {
+            log('patientsOutput', 
+              `Patient ${id}: ${patient.patientName || 'N/A'} - ` +
+              `Temp: ${patient.temperature}°C, HR: ${patient.heartRate} BPM, SpO2: ${patient.oxygenLevel}%`
+            );
+          }
+        }
+        logJSON('patientsOutput', data);
+      } catch (error) {
+        log('patientsOutput', '❌ Error: ' + error.message, true);
+      }
+    }
+
+    async function simulateUpload() {
+      const patientID = document.getElementById('uploadPatientID').value;
+      const temp = document.getElementById('uploadTemp').value;
+      const o2 = document.getElementById('uploadO2').value;
+      const hr = document.getElementById('uploadHR').value;
+
+      log('uploadOutput', `Uploading data for patient ${patientID}...`);
+
+      const formData = new FormData();
+      formData.append('patientID', patientID);
+      formData.append('temperature', temp);
+      formData.append('oxygenLevel', o2);
+      formData.append('heartRate', hr);
+      formData.append('ambulanceID', 'AMB-TEST');
+      formData.append('hospital', 'Hospital 1');
+
+      try {
+        const response = await fetch(API_BASE + 'upload.php', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+          log('uploadOutput', '✅ Upload Successful!');
+          log('uploadOutput', data.message);
+        } else {
+          log('uploadOutput', '❌ Upload Failed: ' + data.message, true);
+        }
+        logJSON('uploadOutput', data);
+      } catch (error) {
+        log('uploadOutput', '❌ Error: ' + error.message, true);
+      }
+    }
+
+    async function updatePatient() {
+      const patientID = document.getElementById('updatePatientID').value;
+      const fieldName = document.getElementById('updateField').value;
+      const newValue = document.getElementById('updateValue').value;
+
+      log('updateOutput', `Updating ${fieldName} for patient ${patientID}...`);
+
+      const formData = new FormData();
+      formData.append('patientID', patientID);
+      formData.append('fieldName', fieldName);
+      formData.append('newValue', newValue);
+
+      try {
+        const response = await fetch(API_BASE + 'update_patient.php', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+          log('updateOutput', '✅ Update Successful!');
+          log('updateOutput', `${fieldName}: "${data.oldValue}" → "${data.newValue}"`);
+        } else {
+          log('updateOutput', '❌ Update Failed: ' + data.message, true);
+        }
+        logJSON('updateOutput', data);
+      } catch (error) {
+        log('updateOutput', '❌ Error: ' + error.message, true);
+      }
+    }
+
+    async function checkSystemStatus() {
+      const output = document.getElementById('statusOutput');
+      output.innerHTML = '<strong>System Status Check...</strong>\n\n';
+
+      // Test 1: Database
+      try {
+        const response = await fetch(API_BASE + 'get_patients.php');
+        const data = await response.json();
+        if (data.error) {
+          output.innerHTML += '<span class="status fail">❌ Database</span> - ' + data.error + '\n';
+        } else {
+          output.innerHTML += '<span class="status ok">✅ Database</span> - Connected (' + (data.count || 0) + ' patients)\n';
+        }
+      } catch (e) {
+        output.innerHTML += '<span class="status fail">❌ Database</span> - ' + e.message + '\n';
+      }
+
+      // Test 2: Upload API
+      try {
+        const formData = new FormData();
+        formData.append('patientID', 'TEST');
+        const response = await fetch(API_BASE + 'upload.php', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await response.json();
+        if (data.success !== undefined) {
+          output.innerHTML += '<span class="status ok">✅ Upload API</span> - Responding\n';
+        } else {
+          output.innerHTML += '<span class="status fail">❌ Upload API</span> - Invalid response\n';
+        }
+      } catch (e) {
+        output.innerHTML += '<span class="status fail">❌ Upload API</span> - ' + e.message + '\n';
+      }
+
+      // Test 3: Update API
+      try {
+        const formData = new FormData();
+        formData.append('patientID', 'P001');
+        formData.append('fieldName', 'patientName');
+        formData.append('newValue', 'Test');
+        const response = await fetch(API_BASE + 'update_patient.php', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await response.json();
+        if (data.success !== undefined) {
+          output.innerHTML += '<span class="status ok">✅ Update API</span> - Responding\n';
+        } else {
+          output.innerHTML += '<span class="status fail">❌ Update API</span> - Invalid response\n';
+        }
+      } catch (e) {
+        output.innerHTML += '<span class="status fail">❌ Update API</span> - ' + e.message + '\n';
+      }
+
+      output.innerHTML += '\n<strong>Check complete!</strong>';
+    }
+
+    // Auto-run connection test on load
+    window.addEventListener('load', () => {
+      setTimeout(testConnection, 500);
+    });
+  </script>
+</body>
+</html>

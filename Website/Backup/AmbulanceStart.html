@@ -121,9 +121,12 @@
       Real-time patient monitoring and emergency response system
     </p>
 
-    <button class="start-button" onclick="startSystem()">
-      START EMERGENCY MODE
-    </button>
+    <form method="GET" style="display: inline;">
+      <input type="hidden" name="page" value="form">
+      <button type="submit" class="start-button">
+        START EMERGENCY MODE
+      </button>
+    </form>
 
     <div class="features">
       <div class="feature-item">
@@ -144,11 +147,18 @@
       </div>
     </div>
   </div>
-
   <script>
     function startSystem() {
-      // Redirect to form page
-      window.location.href = '<?!= ScriptApp.getService().getUrl() ?>?page=form';
+      // Navigate to Google Sites form page
+      // REPLACE WITH YOUR ACTUAL GOOGLE SITES URL
+      var formPageURL = 'https://sites.google.com/view/yoursite/ambulance-form';
+      
+      // Use window.top to navigate parent page (not iframe)
+      if (window.top !== window.self) {
+        window.top.location.href = formPageURL;
+      } else {
+        window.location.href = formPageURL;
+      }
     }
   </script>
 </body>

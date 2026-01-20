@@ -280,6 +280,13 @@
   </div>
 
   <script>
+    // Get base URL from current page
+    function getBaseURL() {
+      var url = window.location.href;
+      // Remove query parameters
+      return url.split('?')[0].split('#')[0];
+    }
+
     // Load available Patient IDs
     window.addEventListener('load', function() {
       google.script.run
@@ -333,7 +340,16 @@
         showAlert('Data submitted successfully! Redirecting to dashboard...', 'success');
         setTimeout(function() {
           var patientID = document.getElementById('patientID').value;
-          window.location.href = '<?!= ScriptApp.getService().getUrl() ?>?page=dashboard&patientID=' + patientID;
+          
+          // REPLACE WITH YOUR ACTUAL GOOGLE SITES DASHBOARD URL
+          var dashboardURL = 'https://sites.google.com/view/yoursite/ambulance-dashboard?patientID=' + patientID;
+          
+          // Use window.top to navigate parent page
+          if (window.top !== window.self) {
+            window.top.location.href = dashboardURL;
+          } else {
+            window.location.href = dashboardURL;
+          }
         }, 2000);
       } else {
         showAlert('Error: ' + response.message, 'error');
