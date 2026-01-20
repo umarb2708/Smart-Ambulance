@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Ambulance System Dashboard</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      background-color: #000000;
+      color: #ffffff;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .dashboard {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header {
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header-title {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+
+    .refresh-indicator {
+      font-size: 12px;
+      color: #a0a0a0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: #2ecc71;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      background-color: #2b2b2b;
+      border-radius: 10px;
+      padding: 16px 18px;
+      box-shadow: 0 0 0 1px #3d3d3d;
+    }
+
+    .card-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .card-title {
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #d0d0d0;
+    }
+
+    .status-badge {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 500;
+    }
+
+    .status-normal {
+      background-color: rgba(46, 204, 113, 0.15);
+      color: #2ecc71;
+      border: 1px solid rgba(46, 204, 113, 0.5);
+    }
+
+    .status-high {
+      background-color: rgba(241, 196, 15, 0.15);
+      color: #f1c40f;
+      border: 1px solid rgba(241, 196, 15, 0.5);
+    }
+
+    .status-low {
+      background-color: rgba(231, 76, 60, 0.15);
+      color: #e74c3c;
+      border: 1px solid rgba(231, 76, 60, 0.5);
+    }
+
+    .card-value {
+      font-size: 26px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .card-subtext {
+      font-size: 12px;
+      color: #a0a0a0;
+    }
+
+    .patient-details {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px 32px;
+      margin-top: 8px;
+    }
+
+    .detail-item-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #b0b0b0;
+      margin-bottom: 2px;
+    }
+
+    .detail-item-value {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .footer {
+      margin-top: 24px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .call-button {
+      background-color: #27ae60;
+      color: #ffffff;
+      border: none;
+      border-radius: 999px;
+      padding: 14px 32px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 0 0 1px #2ecc71, 0 8px 18px rgba(39, 174, 96, 0.35);
+      transition: transform 0.1s ease, box-shadow 0.1s ease, background-color 0.1s ease;
+    }
+
+    .call-button:hover {
+      background-color: #2ecc71;
+      transform: translateY(-1px);
+      box-shadow: 0 10px 24px rgba(39, 174, 96, 0.45);
+    }
+
+    .call-button:active {
+      transform: translateY(0);
+      box-shadow: 0 4px 10px rgba(39, 174, 96, 0.35);
+    }
+
+    @media (max-width: 900px) {
+      .grid-3 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 700px) {
+      .grid-3,
+      .grid-2,
+      .patient-details {
+        grid-template-columns: 1fr;
+      }
+
+      .dashboard {
+        padding-bottom: 40px;
+      }
+    }
+
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .loading-overlay.hidden {
+      display: none;
+    }
+
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+  </div>
+
+  <div class="dashboard">
+    <!-- Section 1: Heading -->
+    <header class="header">
+      <h1 class="header-title">Smart Ambulance System</h1>
+      <div class="refresh-indicator">
+        <span class="pulse"></span>
+        <span>Auto-refreshing every 10s</span>
+      </div>
+    </header>
+
+    <!-- Section 2: Three vitals cards -->
+    <section class="grid-3">
+      <!-- Body Temperature -->
+      <div class="card">
+        <div class="card-title-row">
+          <div class="card-title">Body Temperature</div>
+          <span class="status-badge" id="tempStatus">Normal</span>
+        </div>
+        <div class="card-value" id="tempValue">--°C</div>
+        <div class="card-subtext">Real-time core temperature</div>
+      </div>
+
+      <!-- Heart Rate -->
+      <div class="card">
+        <div class="card-title-row">
+          <div class="card-title">Heart Rate</div>
+          <span class="status-badge" id="hrStatus">Normal</span>
+        </div>
+        <div class="card-value" id="hrValue">-- BPM</div>
+        <div class="card-subtext">Continuous ECG monitor</div>
+      </div>
+
+      <!-- Oxygen Level -->
+      <div class="card">
+        <div class="card-title-row">
+          <div class="card-title">Oxygen Level</div>
+          <span class="status-badge" id="spo2Status">Normal</span>
+        </div>
+        <div class="card-value" id="spo2Value">--%</div>
+        <div class="card-subtext">SpO₂ via pulse oximeter</div>
+      </div>
+    </section>
+
+    <!-- Section 3: Blood pressure and sugar level -->
+    <section class="grid-2">
+      <!-- Blood Pressure -->
+      <div class="card">
+        <div class="card-title-row">
+          <div class="card-title">Blood Pressure</div>
+          <span class="status-badge" id="bpStatus">Normal</span>
+        </div>
+        <div class="card-value" id="bpValue">-- / -- mmHg</div>
+        <div class="card-subtext">Last reading: <span id="lastUpdate">--</span></div>
+      </div>
+
+      <!-- Blood Sugar Level -->
+      <div class="card">
+        <div class="card-title-row">
+          <div class="card-title">Blood Sugar Level</div>
+          <span class="status-badge" id="sugarStatus">Normal</span>
+        </div>
+        <div class="card-value" id="sugarValue">-- mg/dL</div>
+        <div class="card-subtext">Capillary blood glucose</div>
+      </div>
+    </section>
+
+    <!-- Section 4: Patient personal details -->
+    <section class="card">
+      <div class="card-title">Patient Details</div>
+      <div class="patient-details">
+        <div>
+          <div class="detail-item-label">Patient Name</div>
+          <div class="detail-item-value" id="patientName">--</div>
+        </div>
+        <div>
+          <div class="detail-item-label">Age</div>
+          <div class="detail-item-value" id="patientAge">--</div>
+        </div>
+        <div>
+          <div class="detail-item-label">Blood Type</div>
+          <div class="detail-item-value" id="bloodGroup">--</div>
+        </div>
+        <div>
+          <div class="detail-item-label">Contact Number</div>
+          <div class="detail-item-value" id="contactNumber">Not Available</div>
+        </div>
+        <div>
+          <div class="detail-item-label">Medical ID</div>
+          <div class="detail-item-value" id="medicalID">--</div>
+        </div>
+        <div>
+          <div class="detail-item-label">Patient Status</div>
+          <div class="detail-item-value" id="patientStatus">--</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 5: Start video call button -->
+    <footer class="footer">
+      <button class="call-button" onclick="startVideoCall()">
+        Start Video Call with Doctor
+      </button>
+    </footer>
+  </div>
+
+  <script>
+    var currentPatientID = null;
+    var refreshInterval = null;
+
+    // Get Patient ID from URL parameter
+    function getPatientIDFromURL() {
+      var urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('patientID');
+    }
+
+    // Initialize dashboard
+    window.addEventListener('load', function() {
+      currentPatientID = getPatientIDFromURL();
+      
+      if (!currentPatientID) {
+        // Try to get latest active patient
+        google.script.run
+          .withSuccessHandler(function(patientID) {
+            if (patientID) {
+              currentPatientID = patientID;
+              loadDashboard();
+              startAutoRefresh();
+            } else {
+              alert('No active patient found. Please fill the form first.');
+              window.location.href = '<?!= ScriptApp.getService().getUrl() ?>?page=start';
+            }
+          })
+          .getLatestActivePatientID();
+      } else {
+        loadDashboard();
+        startAutoRefresh();
+      }
+    });
+
+    // Load dashboard data
+    function loadDashboard() {
+      if (!currentPatientID) return;
+
+      google.script.run
+        .withSuccessHandler(updateDashboard)
+        .withFailureHandler(handleError)
+        .getDashboardData(currentPatientID);
+    }
+
+    // Update dashboard with data
+    function updateDashboard(data) {
+      document.getElementById('loadingOverlay').classList.add('hidden');
+
+      if (!data || data.error) {
+        console.error('Error loading data:', data ? data.error : 'No data');
+        return;
+      }
+
+      // Update vitals
+      document.getElementById('tempValue').textContent = parseFloat(data.temperature || 0).toFixed(1) + '°C';
+      document.getElementById('hrValue').textContent = (data.heartRate || 0) + ' BPM';
+      document.getElementById('spo2Value').textContent = (data.oxygenLevel || 0) + '%';
+      document.getElementById('bpValue').textContent = data.bloodPressure || 'N/A';
+      document.getElementById('sugarValue').textContent = (data.diabeticsLevel || 0) + ' mg/dL';
+
+      // Update status badges
+      updateStatusBadge('tempStatus', data.tempStatus);
+      updateStatusBadge('hrStatus', data.heartRateStatus);
+      updateStatusBadge('spo2Status', data.oxygenStatus);
+      updateStatusBadge('bpStatus', data.bpStatus);
+      updateStatusBadge('sugarStatus', data.sugarStatus);
+
+      // Update patient details
+      document.getElementById('patientName').textContent = data.patientName || 'N/A';
+      document.getElementById('patientAge').textContent = data.patientAge ? data.patientAge + ' years' : 'N/A';
+      document.getElementById('bloodGroup').textContent = data.bloodGroup || 'N/A';
+      document.getElementById('medicalID').textContent = data.patientID || 'N/A';
+      document.getElementById('patientStatus').textContent = data.patientStatus || 'N/A';
+
+      // Update last update time
+      if (data.date) {
+        var now = new Date();
+        var dataDate = new Date(data.date);
+        var diff = Math.floor((now - dataDate) / 1000);
+        document.getElementById('lastUpdate').textContent = diff + ' sec ago';
+      }
+    }
+
+    // Update status badge
+    function updateStatusBadge(elementId, status) {
+      var element = document.getElementById(elementId);
+      element.textContent = status || 'Normal';
+      element.className = 'status-badge';
+      
+      if (status === 'High' || status === 'Low' || status === 'Critical') {
+        element.classList.add('status-' + status.toLowerCase());
+      } else {
+        element.classList.add('status-normal');
+      }
+    }
+
+    // Start auto-refresh
+    function startAutoRefresh() {
+      // Refresh every 10 seconds
+      refreshInterval = setInterval(function() {
+        loadDashboard();
+      }, 10000);
+    }
+
+    // Handle errors
+    function handleError(error) {
+      document.getElementById('loadingOverlay').classList.add('hidden');
+      console.error('Error:', error);
+    }
+
+    // Start video call
+    function startVideoCall() {
+      // Open Google Meet
+      var meetURL = 'https://meet.google.com/new';
+      window.open(meetURL, '_blank');
+    }
+
+    // Clean up on page unload
+    window.addEventListener('beforeunload', function() {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    });
+  </script>
+</body>
+</html>

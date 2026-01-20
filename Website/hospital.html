@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Hospital Unit Dashboard</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      background: radial-gradient(circle at top, #1a1a1a 0, #000000 55%);
+      color: #ffffff;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .dashboard {
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    .header {
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header-title {
+      font-size: 30px;
+      font-weight: 650;
+      letter-spacing: 1px;
+    }
+
+    .header-subtitle {
+      font-size: 13px;
+      color: #a0a0a0;
+    }
+
+    .header-pill {
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid #3d3d3d;
+      font-size: 12px;
+      color: #d0d0d0;
+      background: linear-gradient(to right, rgba(46, 204, 113, 0.18), transparent);
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      background: linear-gradient(135deg, #242424, #1b1b1b);
+      border-radius: 14px;
+      padding: 16px 18px;
+      border: 1px solid #343434;
+      box-shadow: 0 16px 30px rgba(0, 0, 0, 0.55);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at top right, rgba(0, 255, 170, 0.14), transparent 60%);
+      opacity: 0.8;
+      pointer-events: none;
+    }
+
+    .card-inner {
+      position: relative;
+      z-index: 1;
+    }
+
+    .card-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .card-title {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #d0d0d0;
+    }
+
+    .status-badge {
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 500;
+    }
+
+    .status-normal {
+      background-color: rgba(46, 204, 113, 0.15);
+      color: #2ecc71;
+      border: 1px solid rgba(46, 204, 113, 0.5);
+    }
+
+    .status-high {
+      background-color: rgba(241, 196, 15, 0.15);
+      color: #f1c40f;
+      border: 1px solid rgba(241, 196, 15, 0.5);
+    }
+
+    .status-low {
+      background-color: rgba(231, 76, 60, 0.15);
+      color: #e74c3c;
+      border: 1px solid rgba(231, 76, 60, 0.5);
+    }
+
+    .card-value {
+      font-size: 26px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .card-subtext {
+      font-size: 12px;
+      color: #a0a0a0;
+    }
+
+    .patient-card-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .pill-small {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid #3f3f3f;
+      color: #bbbbbb;
+    }
+
+    .patient-details {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px 32px;
+      margin-top: 4px;
+    }
+
+    .detail-item-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #b0b0b0;
+      margin-bottom: 2px;
+    }
+
+    .detail-item-value {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .section-title {
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #bbbbbb;
+      margin: 4px 0 8px;
+    }
+
+    .footer {
+      margin-top: 10px;
+      display: flex;
+      justify-content: center;
+      padding-bottom: 10px;
+    }
+
+    .call-button {
+      background: linear-gradient(135deg, #2ecc71, #27ae60);
+      color: #ffffff;
+      border: none;
+      border-radius: 999px;
+      padding: 14px 36px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 0 0 1px #2ecc71, 0 10px 26px rgba(39, 174, 96, 0.55);
+      transition: transform 0.1s ease, box-shadow 0.1s ease, filter 0.1s ease;
+    }
+
+    .call-button:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.05);
+      box-shadow: 0 14px 32px rgba(39, 174, 96, 0.7);
+    }
+
+    .call-button:active {
+      transform: translateY(0);
+      box-shadow: 0 6px 14px rgba(39, 174, 96, 0.55);
+    }
+
+    .call-icon {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+      position: relative;
+    }
+
+    .call-icon::before {
+      content: "";
+      position: absolute;
+      inset: 4px;
+      border-radius: 2px;
+      border-left: 2px solid #ffffff;
+      border-bottom: 2px solid #ffffff;
+      transform: rotate(45deg);
+    }
+
+    .badge-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 11px;
+      color: #a8a8a8;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background-color: #2ecc71;
+      box-shadow: 0 0 8px rgba(46, 204, 113, 0.8);
+      margin-right: 4px;
+    }
+
+    .live-text {
+      display: flex;
+      align-items: center;
+    }
+
+    @media (max-width: 900px) {
+      .grid-3 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 700px) {
+      .grid-3,
+      .grid-2,
+      .patient-details {
+        grid-template-columns: 1fr;
+      }
+
+      .dashboard {
+        padding-bottom: 40px;
+      }
+
+      .header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard">
+    <!-- Header -->
+    <header class="header">
+      <div>
+        <h1 class="header-title">Hospital Unit – Critical Care</h1>
+        <p class="header-subtitle">Real-time monitoring for in-transit and in-ward patients</p>
+      </div>
+      <div class="header-pill">
+        Live Status • ICU-03 • Night Shift
+      </div>
+    </header>
+
+    <!-- SECTION 2: Vitals (same cards style as ambulance) -->
+    <section class="grid-3">
+      <!-- Body Temperature -->
+      <div class="card">
+        <div class="card-inner">
+          <div class="card-title-row">
+            <div class="card-title">Body Temperature</div>
+            <span class="status-badge status-normal">Normal</span>
+          </div>
+          <div class="card-value">36.9°C</div>
+          <div class="card-subtext">Core temperature (ear tympanic)</div>
+        </div>
+      </div>
+
+      <!-- Heart Rate -->
+      <div class="card">
+        <div class="card-inner">
+          <div class="card-title-row">
+            <div class="card-title">Heart Rate</div>
+            <span class="status-badge status-high">High</span>
+          </div>
+          <div class="card-value">112 BPM</div>
+          <div class="card-subtext">ECG lead II monitoring</div>
+        </div>
+      </div>
+
+      <!-- Oxygen Level -->
+      <div class="card">
+        <div class="card-inner">
+          <div class="card-title-row">
+            <div class="card-title">Oxygen Level</div>
+            <span class="status-badge status-normal">Normal</span>
+          </div>
+          <div class="card-value">97%</div>
+          <div class="card-subtext">SpO₂ – finger probe</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: Blood pressure and sugar -->
+    <section class="grid-2">
+      <!-- Blood Pressure -->
+      <div class="card">
+        <div class="card-inner">
+          <div class="card-title-row">
+            <div class="card-title">Blood Pressure</div>
+            <span class="status-badge status-normal">Normal</span>
+          </div>
+          <div class="card-value">121 / 79 mmHg</div>
+          <div class="card-subtext">Auto NIBP – 2 min cycle</div>
+        </div>
+      </div>
+
+      <!-- Blood Sugar -->
+      <div class="card">
+        <div class="card-inner">
+          <div class="card-title-row">
+            <div class="card-title">Blood Sugar Level</div>
+            <span class="status-badge status-low">Low</span>
+          </div>
+          <div class="card-value">68 mg/dL</div>
+          <div class="card-subtext">Capillary glucose – bedside</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4: Patient details -->
+    <section>
+      <h3 class="section-title">Patient Details</h3>
+      <div class="card">
+        <div class="card-inner">
+          <div class="patient-card-title">
+            <span class="card-title">Current Patient</span>
+            <span class="pill-small">Bed: CCU-12 • Case: Chest Pain</span>
+          </div>
+
+          <div class="patient-details">
+            <div>
+              <div class="detail-item-label">Patient Name</div>
+              <div class="detail-item-value">Ananya Deshmukh</div>
+            </div>
+            <div>
+              <div class="detail-item-label">Age</div>
+              <div class="detail-item-value">46 years</div>
+            </div>
+            <div>
+              <div class="detail-item-label">Blood Type</div>
+              <div class="detail-item-value">O+ (Positive)</div>
+            </div>
+            <div>
+              <div class="detail-item-label">Contact Number</div>
+              <div class="detail-item-value">+91 98123 45678</div>
+            </div>
+            <div>
+              <div class="detail-item-label">Medical ID</div>
+              <div class="detail-item-value">HOSP-CCU-2026-0048</div>
+            </div>
+            <div>
+              <div class="detail-item-label">Known Conditions</div>
+              <div class="detail-item-value">Type 2 Diabetes, Hypertension</div>
+            </div>
+          </div>
+
+          <div class="badge-row">
+            <div class="live-text">
+              <span class="dot"></span>
+              <span>Telemetry streaming</span>
+            </div>
+            <span>Last sync: 3 sec ago</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 5: Ambulance details -->
+    <section style="margin-top: 22px;">
+      <h3 class="section-title">Ambulance Details</h3>
+      <div class="grid-3">
+        <!-- Card 1: Ambulance ID -->
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-title-row">
+              <div class="card-title">Ambulance ID</div>
+            </div>
+            <div class="card-value">AMB-MUM-1024</div>
+            <div class="card-subtext">Linked to Hospital Unit – CCU</div>
+          </div>
+        </div>
+
+        <!-- Card 2: Ambulance Speed -->
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-title-row">
+              <div class="card-title">Ambulance Speed</div>
+              <span class="status-badge status-high">En Route</span>
+            </div>
+            <div class="card-value">54 km/h</div>
+            <div class="card-subtext">Estimated arrival in 7 min</div>
+          </div>
+        </div>
+
+        <!-- Card 3: Current Location -->
+        <div class="card">
+          <div class="card-inner">
+            <div class="card-title-row">
+              <div class="card-title">Current Location</div>
+            </div>
+            <div class="card-value" style="font-size: 18px;">
+              Eastern Express Hwy, Ghatkopar
+            </div>
+            <div class="card-subtext">Live GPS • Mumbai, MH</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 6: Start video call button -->
+    <footer class="footer">
+      <button class="call-button">
+        <span class="call-icon"></span>
+        Start Video Call with Doctor
+      </button>
+    </footer>
+  </div>
+</body>
+</html>

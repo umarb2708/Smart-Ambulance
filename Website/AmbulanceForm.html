@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Patient Data Entry</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      background-color: #f5f5f5;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 15px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+      padding: 30px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .header h1 {
+      font-size: 26px;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .required {
+      color: #e74c3c;
+    }
+
+    .form-input,
+    .form-select {
+      width: 100%;
+      padding: 12px 15px;
+      font-size: 15px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      transition: border-color 0.3s ease;
+    }
+
+    .form-input:focus,
+    .form-select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .form-select {
+      background-color: #ffffff;
+      cursor: pointer;
+    }
+
+    .submit-button {
+      width: 100%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #ffffff;
+      border: none;
+      border-radius: 10px;
+      padding: 15px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      margin-top: 10px;
+    }
+
+    .submit-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+    }
+
+    .submit-button:active {
+      transform: translateY(0);
+    }
+
+    .submit-button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 20px;
+      color: #667eea;
+    }
+
+    .loading.active {
+      display: block;
+    }
+
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .alert {
+      padding: 12px 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .alert.success {
+      background-color: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+
+    .alert.error {
+      background-color: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+
+    .alert.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Patient Data Entry Form</h1>
+      <p>Fill in the patient details to sync with the monitoring system</p>
+    </div>
+
+    <div id="alertBox" class="alert"></div>
+
+    <form id="patientForm">
+      <div class="form-group">
+        <label class="form-label" for="patientID">
+          Patient ID <span class="required">*</span>
+        </label>
+        <select id="patientID" name="patientID" class="form-select" required>
+          <option value="">Select Patient ID from OLED Display</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="patientName">
+          Patient Name <span class="required">*</span>
+        </label>
+        <input type="text" id="patientName" name="patientName" class="form-input" 
+               placeholder="Enter patient's full name" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="patientAge">
+          Patient Age <span class="required">*</span>
+        </label>
+        <input type="number" id="patientAge" name="patientAge" class="form-input" 
+               placeholder="Enter age" min="0" max="120" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="bloodGroup">
+          Blood Group <span class="required">*</span>
+        </label>
+        <select id="bloodGroup" name="bloodGroup" class="form-select" required>
+          <option value="">Select blood group</option>
+          <option value="A+">A+ (Positive)</option>
+          <option value="A-">A- (Negative)</option>
+          <option value="B+">B+ (Positive)</option>
+          <option value="B-">B- (Negative)</option>
+          <option value="AB+">AB+ (Positive)</option>
+          <option value="AB-">AB- (Negative)</option>
+          <option value="O+">O+ (Positive)</option>
+          <option value="O-">O- (Negative)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="patientStatus">
+          Patient Status <span class="required">*</span>
+        </label>
+        <select id="patientStatus" name="patientStatus" class="form-select" required>
+          <option value="">Select patient status</option>
+          <option value="Normal">Normal</option>
+          <option value="Medium">Medium</option>
+          <option value="Critical">Critical</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="bloodPressure">
+          Blood Pressure <span class="required">*</span>
+        </label>
+        <input type="text" id="bloodPressure" name="bloodPressure" class="form-input" 
+               placeholder="e.g., 120/80" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="diabeticsLevel">
+          Blood Sugar Level (mg/dL) <span class="required">*</span>
+        </label>
+        <input type="number" id="diabeticsLevel" name="diabeticsLevel" class="form-input" 
+               placeholder="Enter blood sugar level" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="ambulanceID">
+          Ambulance ID <span class="required">*</span>
+        </label>
+        <input type="text" id="ambulanceID" name="ambulanceID" class="form-input" 
+               placeholder="e.g., AMB-MUM-1024" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="attenderID">
+          Attender ID <span class="required">*</span>
+        </label>
+        <input type="text" id="attenderID" name="attenderID" class="form-input" 
+               placeholder="Enter your attender ID" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="hospital">
+          Destination Hospital <span class="required">*</span>
+        </label>
+        <select id="hospital" name="hospital" class="form-select" required>
+          <option value="">Select destination hospital</option>
+          <option value="Hospital 1">Hospital 1</option>
+          <option value="Hospital 2">Hospital 2</option>
+          <option value="Hospital 3">Hospital 3</option>
+          <option value="Hospital 4">Hospital 4</option>
+        </select>
+      </div>
+
+      <button type="submit" class="submit-button" id="submitBtn">
+        Submit Patient Data
+      </button>
+    </form>
+
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p>Submitting data...</p>
+    </div>
+  </div>
+
+  <script>
+    // Load available Patient IDs
+    window.addEventListener('load', function() {
+      google.script.run
+        .withSuccessHandler(populatePatientIDs)
+        .withFailureHandler(showError)
+        .getAvailablePatientIDs();
+    });
+
+    function populatePatientIDs(ids) {
+      var select = document.getElementById('patientID');
+      ids.forEach(function(id) {
+        var option = document.createElement('option');
+        option.value = id;
+        option.textContent = id;
+        select.appendChild(option);
+      });
+    }
+
+    // Handle form submission
+    document.getElementById('patientForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      var formData = {
+        patientID: document.getElementById('patientID').value,
+        patientName: document.getElementById('patientName').value,
+        patientAge: document.getElementById('patientAge').value,
+        bloodGroup: document.getElementById('bloodGroup').value,
+        patientStatus: document.getElementById('patientStatus').value,
+        bloodPressure: document.getElementById('bloodPressure').value,
+        diabeticsLevel: document.getElementById('diabeticsLevel').value,
+        ambulanceID: document.getElementById('ambulanceID').value,
+        attenderID: document.getElementById('attenderID').value,
+        hospital: document.getElementById('hospital').value
+      };
+
+      // Show loading
+      document.getElementById('loading').classList.add('active');
+      document.getElementById('submitBtn').disabled = true;
+
+      // Submit data
+      google.script.run
+        .withSuccessHandler(handleSuccess)
+        .withFailureHandler(handleError)
+        .submitManualData(formData);
+    });
+
+    function handleSuccess(response) {
+      document.getElementById('loading').classList.remove('active');
+      
+      if (response.success) {
+        showAlert('Data submitted successfully! Redirecting to dashboard...', 'success');
+        setTimeout(function() {
+          var patientID = document.getElementById('patientID').value;
+          window.location.href = '<?!= ScriptApp.getService().getUrl() ?>?page=dashboard&patientID=' + patientID;
+        }, 2000);
+      } else {
+        showAlert('Error: ' + response.message, 'error');
+        document.getElementById('submitBtn').disabled = false;
+      }
+    }
+
+    function handleError(error) {
+      document.getElementById('loading').classList.remove('active');
+      showAlert('Error: ' + error.message, 'error');
+      document.getElementById('submitBtn').disabled = false;
+    }
+
+    function showError(error) {
+      showAlert('Error loading Patient IDs: ' + error.message, 'error');
+    }
+
+    function showAlert(message, type) {
+      var alertBox = document.getElementById('alertBox');
+      alertBox.textContent = message;
+      alertBox.className = 'alert ' + type + ' active';
+      
+      setTimeout(function() {
+        alertBox.classList.remove('active');
+      }, 5000);
+    }
+  </script>
+</body>
+</html>
