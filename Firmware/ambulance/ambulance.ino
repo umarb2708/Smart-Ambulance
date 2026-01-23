@@ -31,11 +31,12 @@
 #include <TinyGPS++.h>
 
 // WiFi credentials
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
+const char* ssid = "Sweet Home";  // Replace with your WiFi name
+const char* password = "Umar@WIFI123#";  // Replace with your WiFi password
 
-// Google Sheets deployment URL
-const char* serverName = "YOUR_GOOGLE_APPS_SCRIPT_DEPLOYMENT_URL";
+// XAMPP PHP Server URL (Update with your PC's local IP address)
+// Find your IP: Open CMD → type 'ipconfig' → look for IPv4 Address
+const char* serverName = "http://192.168.1.11/smart-ambulance/api/upload.php";  // UPDATE THIS!
 
 // OLED Display settings
 #define SCREEN_WIDTH 128
@@ -69,7 +70,7 @@ TinyGPSPlus gps;
 
 // Patient ID
 String patientID = "";
-String ambulanceID = "AMB-MUM-1024";
+String ambulanceID = "AMB-001";
 
 // Timing variables
 unsigned long lastUploadTime = 0;
@@ -80,11 +81,14 @@ const unsigned long TRANSMIT_INTERVAL = 5000; // 5 seconds
 // Sensor data
 float bodyTemp = 0.0;
 int heartRate = 0;
-int spo2 = 0;
-float latitude = 0.0;
-float longitude = 0.0;
-float ambulanceSpeed = 0.0;
-String hospital = "";
+int oxygenLevel = 0;  // SpO2 percentage
+
+// GPS Placeholder values (since GPS module is not connected)
+float latitude = 12.9716;   // Bangalore, India latitude
+float longitude = 77.5946;  // Bangalore, India longitude
+float ambulanceSpeed = 45.0; // Fixed speed in km/h
+
+String hospital = "Hospital 1";  // Default destination
 bool patientActive = false;
 
 void setup() {
@@ -161,7 +165,9 @@ void setup() {
 }
 
 void loop() {
-  // Read GPS data
+  // GPS data is using placeholder values (defined in global variables)
+  // Uncomment below code when GPS module is connected:
+  /*
   while (gpsSerial.available() > 0) {
     if (gps.encode(gpsSerial.read())) {
       if (gps.location.isValid()) {
@@ -171,6 +177,7 @@ void loop() {
       }
     }
   }
+  */
   
   // Read Temperature
   bodyTemp = mlx.readObjectTempC();
@@ -197,7 +204,9 @@ void loop() {
   
   // Calculate SpO2 (simplified - use library for accurate calculation)
   if (irValue > 50000) {
-    spo2 = 95 + random(0, 4); // Simulated for demo - use proper algorithm
+    oxygenLevel = 95 + random(0, 4); // Simulated for demo - use proper algorithm
+  } else {
+    oxygenLevel = 0; // No finger detected
   }
   
   // Update OLED Display
@@ -220,8 +229,11 @@ void loop() {
 
 void generatePatientID() {
   // Generate unique ID based on timestamp
-  patientID = "AMB-2026-" + String(random(10000, 99999));
+  patientID = "P" + String(random(100, 999));
+  Serial.println("\n=== New Patient ===");
   Serial.println("Patient ID: " + patientID);
+  Serial.println("Ambulance ID: " + ambulanceID);
+  Serial.println("===================\n");
 }
 
 void updateDisplay() {
@@ -241,7 +253,7 @@ void updateDisplay() {
   display.print(heartRate);
   display.println(" BPM");
   display.print("SpO2: ");
-  display.print(spo2);
+  display.print(oxygenLevel);
   display.println(" %");
   
   display.display();
@@ -251,43 +263,55 @@ void uploadToSheets() {
   if(WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
     
-    // Create data payload
-    String url = String(serverName) + "?action=upload";
-    url += "&patientID=" + patientID;
-    url += "&ambulanceID=" + ambulanceID;
-    url += "&temperature=" + String(bodyTemp, 1);
-    url += "&heartRate=" + String(heartRate);
-    url += "&spo2=" + String(spo2);
-    url += "&latitude=" + String(latitude, 6);
-    url += "&longitude=" + String(longitude, 6);
-    url += "&speed=" + String(ambulanceSpeed, 1);
+    Serial.println("\n--- Uploading Data to Server ---");
+    Serial.println("Server: " + String(serverName));
     
-    http.begin(url);
-    int httpResponseCode = http.GET();
+    // Initialize HTTP connection
+    http.begin(serverName);
+    http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+    
+    // Create POST data payload (matching PHP API parameters)
+    String postData = "patientID=" + patientID;
+    postData += "&temperature=" + String(bodyTemp, 1);
+    postData += "&oxygenLevel=" + String(oxygenLevel);
+    postData += "&heartRate=" + String(heartRate);
+    postData += "&ambulanceID=" + ambulanceID;
+    postData += "&speed=" + String(ambulanceSpeed, 1);
+    postData += "&longitude=" + String(longitude, 6);
+    postData += "&latitude=" + String(latitude, 6);
+    postData += "&hospital=" + hospital;
+    
+    Serial.println("Patient ID: " + patientID);
+    Serial.println("Temperature: " + String(bodyTemp, 1) + " °C");
+    Serial.println("Oxygen Level: " + String(oxygenLevel) + " %");
+    Serial.println("Heart Rate: " + String(heartRate) + " BPM");
+    Serial.println("Speed: " + String(ambulanceSpeed, 1) + " km/h");
+    Serial.println("GPS: " + String(latitude, 6) + ", " + String(longitude, 6));
+    
+    // Send POST request
+    int httpResponseCode = http.POST(postData);
     
     if (httpResponseCode > 0) {
       String response = http.getString();
-      Serial.println("Upload Response: " + response);
+      Serial.println("HTTP Response Code: " + String(httpResponseCode));
+      Serial.println("Server Response: " + response);
       
-      // Check if patient is marked as done
-      if (response.indexOf("DONE") >= 0) {
-        patientActive = false;
-        // Generate new Patient ID for next patient
-        generatePatientID();
-      } else {
+      // Parse JSON response
+      if (response.indexOf("\"success\":true") >= 0) {
+        Serial.println("✓ Data uploaded successfully!");
         patientActive = true;
-        // Extract hospital info from response if available
-        int hospitalIndex = response.indexOf("HOSPITAL:");
-        if (hospitalIndex >= 0) {
-          hospital = response.substring(hospitalIndex + 9);
-          hospital.trim();
-        }
+      } else if (response.indexOf("\"success\":false") >= 0) {
+        Serial.println("✗ Upload failed - check server logs");
       }
     } else {
-      Serial.println("Error uploading: " + String(httpResponseCode));
+      Serial.println("✗ HTTP Error: " + String(httpResponseCode));
+      Serial.println("Error: " + http.errorToString(httpResponseCode));
     }
     
     http.end();
+    Serial.println("--- Upload Complete ---\n");
+  } else {
+    Serial.println("✗ WiFi not connected!");
   }
 }
 
