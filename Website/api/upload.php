@@ -6,6 +6,12 @@
  * URL: http://localhost/smart_ambulance/api/upload.php
  */
 
+// Start output buffering
+ob_start();
+
+// Set JSON header first
+header('Content-Type: application/json; charset=utf-8');
+
 define('API_ACCESS', true);
 require_once 'config.php';
 
@@ -30,23 +36,23 @@ $pastTrafficInt = sanitize($_POST['pastTrafficInt'] ?? '');
 $hospital = sanitize($_POST['hospital'] ?? '');
 
 // Validate required fields
-if (empty($patientID)) {
-    sendJSON(['success' => false, 'message' => 'Patient ID is required'], 400);
+if (empty($ambulanceID)) {
+    sendJSON(['success' => false, 'message' => 'Ambulance ID is required'], 400);
 }
 
-// Check if patient exists
-$stmt = $conn->prepare("SELECT id FROM patients WHERE patient_id = ?");
-$stmt->bind_param("s", $patientID);
+// Check if ambulance has an active patient (done=0)
+$stmt = $conn->prepare("SELECT id FROM patients WHERE ambulance_id = ? AND done = 0");
+$stmt->bind_param("s", $ambulanceID);
 $stmt->execute();
 $result = $stmt->get_result();
 
 if ($result->num_rows > 0) {
-    // Update existing patient - only update sensor data fields
+    // Update existing active patient - only update sensor data fields
     $sql = "UPDATE patients SET 
+            patient_id = ?,
             temperature = ?, 
             oxygen_level = ?, 
             heart_rate = ?, 
-            ambulance_id = ?, 
             speed = ?, 
             longitude = ?, 
             latitude = ?, 
@@ -54,32 +60,33 @@ if ($result->num_rows > 0) {
             past_traffic_int = ?, 
             hospital = ?,
             updated_at = NOW()
-            WHERE patient_id = ?";
+            WHERE ambulance_id = ? AND done = 0";
     
     $stmt = $conn->prepare($sql);
     $stmt->bind_param(
-        "diiisddssss", 
+        "sdiidddssss", 
+        $patientID,
         $temperature, 
         $oxygenLevel, 
         $heartRate, 
-        $ambulanceID, 
         $speed, 
         $longitude, 
         $latitude, 
         $nextTrafficInt, 
         $pastTrafficInt, 
         $hospital, 
-        $patientID
+        $ambulanceID
     );
     
     if ($stmt->execute()) {
         // Log activity
-        logActivity($conn, $patientID, 'sensor_update', 'vitals', '', 
+        logActivity($conn, $ambulanceID, $patientID, 'sensor_update', 'vitals', '', 
                    "Temp: $temperature, O2: $oxygenLevel, HR: $heartRate");
         
         sendJSON([
             'success' => true, 
             'message' => 'Patient vitals updated successfully',
+            'ambulanceID' => $ambulanceID,
             'patientID' => $patientID,
             'timestamp' => date('Y-m-d H:i:s')
         ]);
@@ -91,21 +98,21 @@ if ($result->num_rows > 0) {
         ], 500);
     }
 } else {
-    // Insert new patient record
+    // Insert new patient record (ambulance_id is primary key)
     $sql = "INSERT INTO patients (
-                patient_id, temperature, oxygen_level, heart_rate, 
-                ambulance_id, speed, longitude, latitude, 
+                ambulance_id, patient_id, temperature, oxygen_level, heart_rate, 
+                speed, longitude, latitude, 
                 next_traffic_int, past_traffic_int, hospital, done
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)";
     
     $stmt = $conn->prepare($sql);
     $stmt->bind_param(
-        "sdiisddssss", 
+        "ssdiidddssss", 
+        $ambulanceID,
         $patientID, 
         $temperature, 
         $oxygenLevel, 
         $heartRate, 
-        $ambulanceID, 
         $speed, 
         $longitude, 
         $latitude, 
@@ -116,11 +123,12 @@ if ($result->num_rows > 0) {
     
     if ($stmt->execute()) {
         // Log activity
-        logActivity($conn, $patientID, 'patient_created', '', '', $patientID);
+        logActivity($conn, $ambulanceID, $patientID, 'patient_created', '', '', $ambulanceID);
         
         sendJSON([
             'success' => true, 
             'message' => 'New patient record created successfully',
+            'ambulanceID' => $ambulanceID,
             'patientID' => $patientID,
             'timestamp' => date('Y-m-d H:i:s')
         ], 201);

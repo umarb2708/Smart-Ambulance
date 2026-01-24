@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Emergency Service Dashboard</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    :root {
+      --primary-blue: #1e88e5;
+      --dark-blue: #1565c0;
+      --light-blue: #42a5f5;
+      --bg-dark: #0d1117;
+      --bg-card: #161b22;
+      --bg-card-hover: #1c2128;
+      --text-primary: #ffffff;
+      --text-secondary: #8b949e;
+      --border-color: #30363d;
+      --success: #2ea043;
+      --warning: #d29922;
+      --danger: #f85149;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      background: var(--bg-dark);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+      line-height: 1.6;
+    }
+    
+    .dashboard-header {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-color);
+      padding: 20px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+    
+    .header-left h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 600;
+      background: linear-gradient(135deg, var(--primary-blue), var(--light-blue));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .header-left p {
+      margin: 5px 0 0 0;
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+    
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    
+    .auto-refresh {
+      color: var(--text-secondary);
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .auto-refresh::before {
+      content: "●";
+      color: var(--success);
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    
+    .logout-btn {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid var(--border-color);
+      padding: 8px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s;
+      font-weight: 500;
+    }
+    
+    .logout-btn:hover {
+      background: var(--primary-blue);
+      color: white;
+      border-color: var(--primary-blue);
+      transform: translateY(-1px);
+    }
+    
+    .dashboard-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    .section-header {
+      color: var(--text-primary);
+      padding: 20px 0 15px 0;
+      margin: 20px 0 15px 0;
+      font-weight: 600;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .section-header::before {
+      content: "";
+      width: 4px;
+      height: 24px;
+      background: linear-gradient(180deg, var(--primary-blue), var(--light-blue));
+      border-radius: 2px;
+    }
+    
+    /* Cards Grid */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--primary-blue), var(--light-blue));
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    
+    .card:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--primary-blue);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(30, 136, 229, 0.15);
+    }
+    
+    .card:hover::before {
+      opacity: 1;
+    }
+    
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    
+    .card-title {
+      font-size: 14px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+    
+    .card-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    
+    .card-subtext {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .status-normal {
+      background: rgba(46, 160, 67, 0.15);
+      color: var(--success);
+    }
+    
+    .status-high {
+      background: rgba(248, 81, 73, 0.15);
+      color: var(--danger);
+    }
+    
+    .status-low {
+      background: rgba(210, 153, 34, 0.15);
+      color: var(--warning);
+    }
+    
+    .edit-btn, .save-btn, .cancel-btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: none;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .edit-btn {
+      background: transparent;
+      color: var(--primary-blue);
+      border: 1px solid var(--primary-blue);
+    }
+    
+    .edit-btn:hover {
+      background: var(--primary-blue);
+      color: white;
+    }
+    
+    .save-btn {
+      background: var(--success);
+      color: white;
+      margin-right: 8px;
+    }
+    
+    .save-btn:hover {
+      background: #26843c;
+      transform: translateY(-1px);
+    }
+    
+    .cancel-btn {
+      background: var(--bg-dark);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-color);
+    }
+    
+    .cancel-btn:hover {
+      background: var(--danger);
+      color: white;
+      border-color: var(--danger);
+    }
+    
+    .card-input, .card-select {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--bg-dark);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 16px;
+      margin: 10px 0;
+    }
+    
+    .card-input:focus, .card-select:focus {
+      outline: none;
+      border-color: var(--primary-blue);
+      box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.1);
+    }
+    
+    /* Patient Info Section */
+    
+    /* Patient Info Section */
+    .patient-info-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      padding: 25px;
+      border-radius: 12px;
+      margin-bottom: 30px;
+    }
+    
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 25px;
+      margin-bottom: 25px;
+    }
+    
+    .info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .info-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    
+    .info-value {
+      font-size: 20px;
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+    
+    .info-value.empty {
+      color: var(--text-secondary);
+      font-style: italic;
+      font-weight: 400;
+    }
+    
+    .update-details-btn {
+      background: var(--primary-blue);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.3s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .update-details-btn:hover {
+      background: var(--dark-blue);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(30, 136, 229, 0.3);
+    }
+    
+    /* Modal Styles */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(5px);
+      justify-content: center;
+      align-items: center;
+    }
+    
+    .modal.active {
+      display: flex;
+    }
+    
+    .modal-content {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      padding: 30px;
+      border-radius: 16px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+    
+    .modal-content::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    .modal-content::-webkit-scrollbar-track {
+      background: var(--bg-dark);
+      border-radius: 4px;
+    }
+    
+    .modal-content::-webkit-scrollbar-thumb {
+      background: var(--primary-blue);
+      border-radius: 4px;
+    }
+    
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 25px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    .modal-header h2 {
+      margin: 0;
+      color: var(--text-primary);
+      font-size: 22px;
+      font-weight: 600;
+    }
+    
+    .close-modal {
+      font-size: 28px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      background: none;
+      border: none;
+      transition: all 0.3s;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+    }
+    
+    .close-modal:hover {
+      color: var(--text-primary);
+      background: var(--bg-dark);
+    }
+    
+    .form-row {
+      margin-bottom: 20px;
+    }
+    
+    .form-row label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    .form-row input,
+    .form-row select {
+      width: 100%;
+      padding: 12px 15px;
+      background: var(--bg-dark);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 15px;
+      color: var(--text-primary);
+      box-sizing: border-box;
+      transition: all 0.3s;
+    }
+    
+    .form-row input:focus,
+    .form-row select:focus {
+      outline: none;
+      border-color: var(--primary-blue);
+      box-shadow: 0 0 0 3px rgba(30, 136, 229, 0.1);
+    }
+    
+    .save-modal-btn {
+      width: 100%;
+      padding: 14px;
+      background: var(--primary-blue);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .save-modal-btn:hover {
+      background: var(--dark-blue);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(30, 136, 229, 0.3);
+    }
+    
+    /* Loading Overlay */
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      backdrop-filter: blur(5px);
+    }
+    
+    .loading-overlay.hidden {
+      display: none;
+    }
+    
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid var(--border-color);
+      border-top: 4px solid var(--primary-blue);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    /* Video Call Button */
+    .video-call-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: linear-gradient(135deg, #00c853, #00e676);
+      color: white;
+      border: none;
+      padding: 16px 32px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0, 200, 83, 0.3);
+      margin-top: 30px;
+      width: 100%;
+      max-width: 400px;
+    }
+    
+    .video-call-btn:hover {
+      background: linear-gradient(135deg, #00e676, #69f0ae);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 200, 83, 0.4);
+    }
+    
+    .video-call-btn:active {
+      transform: translateY(0);
+    }
+    
+    .video-call-btn .call-icon {
+      font-size: 20px;
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    
+    .video-call-container {
+      display: flex;
+      justify-content: center;
+      margin-top: 30px;
+      padding: 0 30px;
+    }
+    
+    /* Incoming Call Popup */
+    .incoming-call-popup {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--bg-card);
+      border: 2px solid var(--primary-blue);
+      border-radius: 16px;
+      padding: 30px;
+      z-index: 10000;
+      box-shadow: 0 10px 40px rgba(30, 136, 229, 0.4);
+      min-width: 350px;
+      text-align: center;
+      animation: popupSlideIn 0.3s ease;
+    }
+    
+    .incoming-call-popup.show {
+      display: block;
+    }
+    
+    @keyframes popupSlideIn {
+      from {
+        opacity: 0;
+        transform: translate(-50%, -60%);
+      }
+      to {
+        opacity: 1;
+        transform: translate(-50%, -50%);
+      }
+    }
+    
+    .incoming-call-popup .call-icon-large {
+      font-size: 60px;
+      margin-bottom: 15px;
+      animation: ring 1s infinite;
+    }
+    
+    @keyframes ring {
+      0%, 100% { transform: rotate(0deg); }
+      10%, 30% { transform: rotate(-15deg); }
+      20%, 40% { transform: rotate(15deg); }
+    }
+    
+    .incoming-call-popup h3 {
+      color: var(--text-primary);
+      font-size: 22px;
+      margin-bottom: 10px;
+    }
+    
+    .incoming-call-popup p {
+      color: var(--text-secondary);
+      margin-bottom: 25px;
+      font-size: 14px;
+    }
+    
+    .answer-call-btn {
+      background: linear-gradient(135deg, #00c853, #00e676);
+      color: white;
+      border: none;
+      padding: 14px 30px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0, 200, 83, 0.3);
+      width: 100%;
+    }
+    
+    .answer-call-btn:hover {
+      background: linear-gradient(135deg, #00e676, #69f0ae);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 200, 83, 0.4);
+    }
+    
+    .popup-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 9999;
+      backdrop-filter: blur(5px);
+    }
+    
+    .popup-overlay.show {
+      display: block;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+      .dashboard-header {
+        flex-direction: column;
+        gap: 15px;
+        text-align: center;
+      }
+      
+      .header-right {
+        flex-direction: column;
+        width: 100%;
+      }
+      
+      .logout-btn {
+        width: 100%;
+      }
+      
+      .cards-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .info-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="loading-overlay hidden" id="loadingOverlay">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Header -->
+  <div class="dashboard-header">
+    <div class="header-left">
+      <h1>🚑 Emergency Service Dashboard</h1>
+      <p>Ambulance: <strong id="headerAmbulanceID">Loading...</strong> | Attendant: <strong id="headerAttendarName">Loading...</strong></p>
+    </div>
+    <div class="header-right">
+      <div class="auto-refresh">Auto-refresh: 10s</div>
+      <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="dashboard-container">
+    <!-- Section 1: Real-Time Vitals -->
+    <div class="section-header">Real-Time Vital Signs</div>
+    <section class="cards-grid">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Body Temperature</div>
+          <span class="status-badge" id="tempStatus">Normal</span>
+        </div>
+        <div class="card-value" id="temperature">--</div>
+        <div class="card-subtext">From MLX90614 sensor</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Heart Rate</div>
+          <span class="status-badge" id="heartRateStatus">Normal</span>
+        </div>
+        <div class="card-value" id="heartRate">--</div>
+        <div class="card-subtext">From MAX30102 sensor</div>
+      </div>
+
+    <div class="card read-only">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Oxygen Level (SpO₂)</div>
+          <span class="status-badge" id="oxygenStatus">Normal</span>
+        </div>
+        <div class="card-value" id="oxygenLevel">--</div>
+        <div class="card-subtext">From MAX30102 sensor</div>
+      </div>
+    </section>
+
+    <!-- Section 2: Editable Medical Data -->
+    <div class="section-header">Medical Data (Editable)</div>
+    <section class="cards-grid">
+      <div class="card" id="card-bloodPressure">
+        <div class="card-header">
+          <div class="card-title">Blood Pressure</div>
+          <button class="edit-btn" onclick="editField('bloodPressure')">EDIT</button>
+        </div>
+        <div class="card-value" id="value-bloodPressure">Not Updated</div>
+      </div>
+
+      <div class="card" id="card-diabeticsLevel">
+        <div class="card-header">
+          <div class="card-title">Blood Sugar Level</div>
+          <button class="edit-btn" onclick="editField('diabeticsLevel')">EDIT</button>
+        </div>
+        <div class="card-value" id="value-diabeticsLevel">Not Updated</div>
+      </div>
+
+      <div class="card" id="card-patientStatus">
+        <div class="card-header">
+          <div class="card-title">Patient Status</div>
+          <button class="edit-btn" onclick="editField('patientStatus')">EDIT</button>
+        </div>
+        <div class="card-value" id="value-patientStatus">Normal</div>
+      </div>
+    </section>
+
+    <!-- Section 3: Patient Information -->
+    <div class="section-header">Patient Information</div>
+    <div class="patient-info-section">
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-label">Patient ID</div>
+          <div class="info-value" id="patientID">Not Assigned</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Patient Name</div>
+          <div class="info-value" id="patientName">Not Entered</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Age</div>
+          <div class="info-value" id="patientAge">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Blood Group</div>
+          <div class="info-value" id="bloodGroup">--</div>
+        </div>
+      </div>
+      <button class="update-details-btn" onclick="openPatientDetailsModal()">
+      Update Patient Details
+      </button>
+    </div>
+
+    <!-- Section 4: Ambulance & Location Details -->
+    <div class="section-header">Ambulance & Location</div>
+    <section class="cards-grid">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">GPS Location</div>
+        </div>
+        <div style="font-size: 16px; line-height: 1.8; margin: 10px 0;">
+          <div><strong>Lat:</strong> <span id="latitude">0.0000000</span></div>
+          <div><strong>Long:</strong> <span id="longitude">0.0000000</span></div>
+        </div>
+        <div class="card-subtext" id="gpsPosition">Position updating...</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Ambulance Speed</div>
+        </div>
+        <div class="card-value" id="speed">0 km/h</div>
+        <div class="card-subtext">Current speed</div>
+      </div>
+
+      <div class="card" id="card-hospital">
+        <div class="card-header">
+          <div class="card-title">Destination Hospital</div>
+          <button class="edit-btn" onclick="editField('hospital')">EDIT</button>
+        </div>
+        <div class="card-value" id="value-hospital">Not Selected</div>
+      </div>
+    </section>
+    
+    <!-- Video Call Section -->
+    <div class="video-call-container">
+      <button class="video-call-btn" onclick="startVideoCall()">
+        <span class="call-icon">📞</span>
+        Start Video Call with Doctor
+      </button>
+    </div>
+  </div>
+
+  <!-- Patient Details Modal -->
+  <div id="patientDetailsModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Update Patient Details</h2>
+        <button class="close-modal" onclick="closePatientDetailsModal()">&times;</button>
+      </div>
+      <form onsubmit="savePatientDetails(event)">
+        <div class="form-row">
+          <label for="modal-patientID">Patient ID Number</label>
+          <input type="text" id="modal-patientID" placeholder="e.g., P001, ID12345">
+        </div>
+        <div class="form-row">
+          <label for="modal-patientName">Full Name</label>
+          <input type="text" id="modal-patientName" placeholder="Enter patient's full name" required>
+        </div>
+        <div class="form-row">
+          <label for="modal-patientAge">Age</label>
+          <input type="number" id="modal-patientAge" placeholder="Enter age" min="0" max="150">
+        </div>
+        <div class="form-row">
+          <label for="modal-bloodGroup">Blood Group</label>
+          <select id="modal-bloodGroup">
+            <option value="">Select Blood Group</option>
+            <option value="A+">A+</option>
+            <option value="A-">A-</option>
+            <option value="B+">B+</option>
+            <option value="B-">B-</option>
+            <option value="AB+">AB+</option>
+            <option value="AB-">AB-</option>
+            <option value="O+">O+</option>
+            <option value="O-">O-</option>
+          </select>
+        </div>
+        <button type="submit" class="save-modal-btn">Save Details</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Incoming Call Popup -->
+  <div class="popup-overlay" id="callPopupOverlay"></div>
+  <div class="incoming-call-popup" id="incomingCallPopup">
+    <div class="call-icon-large">📞</div>
+    <h3>Incoming Video Call</h3>
+    <p>Hospital wants to start a video call</p>
+    <button class="answer-call-btn" onclick="answerCall()">Join Call</button>
+  </div>
+
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

@@ -6,6 +6,12 @@
  * URL: http://localhost/smart_ambulance/api/get_patients.php
  */
 
+// Start output buffering
+ob_start();
+
+// Set JSON header first
+header('Content-Type: application/json; charset=utf-8');
+
 define('API_ACCESS', true);
 require_once 'config.php';
 
@@ -13,6 +19,7 @@ $conn = getDBConnection();
 
 // Get all active patients (done = 0)
 $sql = "SELECT 
+    ambulance_id,
     patient_id,
     patient_name,
     patient_age,
@@ -23,7 +30,6 @@ $sql = "SELECT
     heart_rate,
     blood_pressure,
     diabetics_level,
-    ambulance_id,
     speed,
     longitude,
     latitude,
@@ -76,7 +82,8 @@ while ($row = $result->fetch_assoc()) {
     }
     
     // Build patient object with all fields
-    $patients[$row['patient_id']] = [
+    $patients[$row['ambulance_id']] = [
+        'ambulanceID' => $row['ambulance_id'],
         'patientID' => $row['patient_id'],
         'patientName' => $row['patient_name'] ?: '',
         'patientAge' => $row['patient_age'] ?: '',
@@ -87,7 +94,6 @@ while ($row = $result->fetch_assoc()) {
         'heartRate' => $hr,
         'bloodPressure' => $row['blood_pressure'] ?: '',
         'diabeticsLevel' => $row['diabetics_level'] ?: '',
-        'ambulanceID' => $row['ambulance_id'] ?: '',
         'speed' => $row['speed'] ?: '',
         'longitude' => $row['longitude'] ?: '',
         'latitude' => $row['latitude'] ?: '',

@@ -6,6 +6,17 @@
  * URL: http://localhost/smart_ambulance/api/update_patient.php
  */
 
+// Start output buffering
+ob_start();
+
+// Set JSON header first
+header('Content-Type: application/json; charset=utf-8');
+
+// Start session to update hospital_id if needed
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 define('API_ACCESS', true);
 require_once 'config.php';
 
@@ -17,13 +28,15 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $conn = getDBConnection();
 
 // Get POST data
+$ambulanceID = sanitize($_POST['ambulanceID'] ?? '');
 $patientID = sanitize($_POST['patientID'] ?? '');
 $fieldName = sanitize($_POST['fieldName'] ?? '');
 $newValue = $_POST['newValue'] ?? '';
+$hospitalID = sanitize($_POST['hospitalID'] ?? ''); // Hospital ID when selecting hospital
 
 // Validate required fields
-if (empty($patientID)) {
-    sendJSON(['success' => false, 'message' => 'Patient ID is required'], 400);
+if (empty($ambulanceID)) {
+    sendJSON(['success' => false, 'message' => 'Ambulance ID is required'], 400);
 }
 
 if (empty($fieldName)) {
@@ -32,13 +45,13 @@ if (empty($fieldName)) {
 
 // Field mapping for security - only allow specific fields to be updated
 $allowedFields = [
+    'patientID' => 'patient_id',
     'patientName' => 'patient_name',
     'patientAge' => 'patient_age',
     'bloodGroup' => 'blood_group',
     'patientStatus' => 'patient_status',
     'bloodPressure' => 'blood_pressure',
     'diabeticsLevel' => 'diabetics_level',
-    'ambulanceID' => 'ambulance_id',
     'hospital' => 'hospital'
 ];
 
@@ -54,48 +67,63 @@ if (!isset($allowedFields[$fieldName])) {
 $dbField = $allowedFields[$fieldName];
 
 // Get old value for logging
-$stmt = $conn->prepare("SELECT $dbField FROM patients WHERE patient_id = ?");
-$stmt->bind_param("s", $patientID);
+$stmt = $conn->prepare("SELECT $dbField FROM patients WHERE ambulance_id = ? AND done = 0");
+$stmt->bind_param("s", $ambulanceID);
 $stmt->execute();
 $result = $stmt->get_result();
 
 if ($result->num_rows === 0) {
-    sendJSON(['success' => false, 'message' => 'Patient not found'], 404);
+    sendJSON(['success' => false, 'message' => 'No active patient found for this ambulance'], 404);
 }
 
 $row = $result->fetch_assoc();
 $oldValue = $row[$dbField];
 $stmt->close();
 
-// Update patient field
-$sql = "UPDATE patients SET $dbField = ?, updated_at = NOW() WHERE patient_id = ?";
+// Update patient field (only active patient)
+$sql = "UPDATE patients SET $dbField = ?, updated_at = NOW() WHERE ambulance_id = ? AND done = 0";
 $stmt = $conn->prepare($sql);
 
 // Sanitize new value
 $newValue = sanitize($newValue);
 
-$stmt->bind_param("ss", $newValue, $patientID);
+$stmt->bind_param("ss", $newValue, $ambulanceID);
 
 if ($stmt->execute()) {
     if ($stmt->affected_rows > 0) {
-        // Log the change
-        logActivity($conn, $patientID, 'field_update', $fieldName, $oldValue, $newValue);
+        // If hospital field was updated, store hospital_id in session
+        if ($fieldName === 'hospital' && !empty($hospitalID)) {
+            $_SESSION['selected_hospital_id'] = $hospitalID;
+            $_SESSION['selected_hospital_name'] = $newValue;
+        }
         
-        sendJSON([
+        // Log the change
+        logActivity($conn, $ambulanceID, $patientID, 'field_update', $fieldName, $oldValue, $newValue);
+        
+        $response = [
             'success' => true,
             'message' => 'Field updated successfully',
             'field' => $fieldName,
             'oldValue' => $oldValue,
             'newValue' => $newValue,
+            'ambulanceID' => $ambulanceID,
             'patientID' => $patientID,
             'timestamp' => date('Y-m-d H:i:s')
-        ]);
+        ];
+        
+        // Include hospital_id in response if it was updated
+        if ($fieldName === 'hospital' && !empty($hospitalID)) {
+            $response['hospital_id'] = $hospitalID;
+        }
+        
+        sendJSON($response);
     } else {
         sendJSON([
             'success' => true,
             'message' => 'No changes made (value was already the same)',
             'field' => $fieldName,
             'value' => $newValue,
+            'ambulanceID' => $ambulanceID,
             'patientID' => $patientID
         ]);
     }

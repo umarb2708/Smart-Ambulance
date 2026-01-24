@@ -3,36 +3,369 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Smart Ambulance Dashboard</title>
+  <title>Smart Ambulance - Login</title>
   <link rel="stylesheet" href="css/style.css">
+  <style>
+    .login-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 20px;
+    }
+    
+    .login-box {
+      background: white;
+      border-radius: 15px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 450px;
+      width: 100%;
+    }
+    
+    .login-header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    
+    .login-header h1 {
+      font-size: 28px;
+      color: #333;
+      margin-bottom: 10px;
+    }
+    
+    .login-header p {
+      color: #666;
+      font-size: 14px;
+    }
+    
+    .ambulance-icon {
+      font-size: 60px;
+      margin-bottom: 20px;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      color: #333;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    .form-group input {
+      width: 100%;
+      padding: 12px 15px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 16px;
+      transition: all 0.3s;
+      box-sizing: border-box;
+    }
+    
+    .form-group input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    .login-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    
+    .login-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    .login-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .service-container {
+      display: none;
+      text-align: center;
+    }
+    
+    .welcome-message {
+      font-size: 24px;
+      color: #333;
+      margin-bottom: 10px;
+    }
+    
+    .attendar-name {
+      font-size: 18px;
+      color: #667eea;
+      font-weight: 600;
+      margin-bottom: 30px;
+    }
+    
+    .start-service-btn {
+      padding: 20px 50px;
+      background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 20px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 10px 25px rgba(46, 204, 113, 0.3);
+    }
+    
+    .start-service-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 15px 35px rgba(46, 204, 113, 0.4);
+    }
+    
+    .logout-btn {
+      margin-top: 20px;
+      padding: 10px 30px;
+      background: #e74c3c;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    
+    .logout-btn:hover {
+      background: #c0392b;
+    }
+    
+    .error-message {
+      background: #fee;
+      color: #c00;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      display: none;
+    }
+    
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    
+    .loading-overlay.hidden {
+      display: none;
+    }
+    
+    .spinner {
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top: 4px solid white;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
 </head>
 <body>
   <div class="loading-overlay hidden" id="loadingOverlay">
     <div class="spinner"></div>
   </div>
 
-  <div class="dashboard">
-    <header class="header">
-      <h1 class="header-title">🚑 Smart Ambulance Dashboard</h1>
-      
-      <div class="patient-selector">
-        <label for="patientSelect">Select Patient:</label>
-        <select id="patientSelect" onchange="loadPatientData()">
-          <option value="">-- Choose Patient ID --</option>
-        </select>
+  <div class="login-container">
+    <div class="login-box">
+      <div class="login-header">
+        <div class="ambulance-icon">🚑</div>
+        <h1>Smart Ambulance System</h1>
+        <p>Attendant Login Portal</p>
       </div>
 
-      <div class="refresh-indicator">
-        <span class="pulse"></span>
-        <span>Auto-refreshing every 10 seconds</span>
-      </div>
-    </header>
+      <div id="errorMessage" class="error-message"></div>
 
-    <div id="dashboardContent" class="no-data">
-      Please select a patient from the dropdown above
+      <!-- Login Form -->
+      <div id="loginForm">
+        <form onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label for="ambulance_id">Ambulance ID</label>
+            <input 
+              type="text" 
+              id="ambulance_id" 
+              name="ambulance_id" 
+              placeholder="Enter Ambulance ID (e.g., AMB-001)" 
+              required
+              autocomplete="username"
+            >
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input 
+              type="password" 
+              id="password" 
+              name="password" 
+              placeholder="Enter Password" 
+              required
+              autocomplete="current-password"
+            >
+          </div>
+
+          <button type="submit" class="login-btn" id="loginBtn">
+            Login
+          </button>
+        </form>
+      </div>
+
+      <!-- Service Start Screen (Hidden Initially) -->
+      <div id="serviceContainer" class="service-container">
+        <div class="welcome-message">Welcome,</div>
+        <div class="attendar-name" id="attendarName"></div>
+        <div class="ambulance-info" style="margin-bottom: 30px; color: #666;">
+          <strong>Ambulance ID:</strong> <span id="ambulanceID"></span>
+        </div>
+        <button class="start-service-btn" onclick="startEmergencyService()">
+          🚨 Start Emergency Service
+        </button>
+        <br>
+        <button class="logout-btn" onclick="logout()">
+          Logout
+        </button>
+      </div>
     </div>
   </div>
 
-  <script src="js/dashboard.js"></script>
+  <script>
+    const API_BASE = 'api/';
+
+    // Check if already logged in
+    window.addEventListener('load', function() {
+      checkSession();
+    });
+
+    function checkSession() {
+      fetch(API_BASE + 'check_session.php', {
+        credentials: 'same-origin'
+      })
+        .then(response => response.json())
+        .then(result => {
+          if (result.logged_in) {
+            showServiceScreen(result.ambulance_id, result.attendar_name);
+          }
+        })
+        .catch(error => {
+          console.log('No active session');
+        });
+    }
+
+    function handleLogin(event) {
+      event.preventDefault();
+      
+      const ambulanceID = document.getElementById('ambulance_id').value;
+      const password = document.getElementById('password').value;
+      const errorMsg = document.getElementById('errorMessage');
+      const loginBtn = document.getElementById('loginBtn');
+      
+      errorMsg.style.display = 'none';
+      loginBtn.disabled = true;
+      loginBtn.textContent = 'Logging in...';
+
+      const formData = new FormData();
+      formData.append('ambulance_id', ambulanceID);
+      formData.append('password', password);
+
+      fetch(API_BASE + 'login.php', {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin'
+      })
+      .then(response => response.json())
+      .then(result => {
+        loginBtn.disabled = false;
+        loginBtn.textContent = 'Login';
+
+        if (result.success) {
+          showServiceScreen(result.ambulance_id, result.attendar_name);
+        } else {
+          errorMsg.textContent = result.message;
+          errorMsg.style.display = 'block';
+        }
+      })
+      .catch(error => {
+        loginBtn.disabled = false;
+        loginBtn.textContent = 'Login';
+        errorMsg.textContent = 'Login failed: ' + error.message;
+        errorMsg.style.display = 'block';
+      });
+    }
+
+    function showServiceScreen(ambulanceID, attendarName) {
+      document.getElementById('loginForm').style.display = 'none';
+      document.getElementById('serviceContainer').style.display = 'block';
+      document.getElementById('attendarName').textContent = attendarName;
+      document.getElementById('ambulanceID').textContent = ambulanceID;
+    }
+
+    function startEmergencyService() {
+      document.getElementById('loadingOverlay').classList.remove('hidden');
+
+      fetch(API_BASE + 'start_service.php', {
+        method: 'POST',
+        credentials: 'same-origin'
+      })
+      .then(response => response.json())
+      .then(result => {
+        document.getElementById('loadingOverlay').classList.add('hidden');
+
+        if (result.success) {
+          // Redirect to dashboard
+          window.location.href = result.redirect;
+        } else {
+          alert('Error: ' + result.message);
+        }
+      })
+      .catch(error => {
+        document.getElementById('loadingOverlay').classList.add('hidden');
+        alert('Error starting service: ' + error.message);
+      });
+    }
+
+    function logout() {
+      fetch(API_BASE + 'logout.php', {
+        method: 'POST',
+        credentials: 'same-origin'
+      })
+      .then(response => response.json())
+      .then(result => {
+        location.reload();
+      })
+      .catch(error => {
+        console.error('Logout error:', error);
+        location.reload();
+      });
+    }
+  </script>
 </body>
 </html>
