@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test MAC Address API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+        .result.success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .result.error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .result-data {
+            margin-top: 10px;
+            font-family: monospace;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            white-space: pre-wrap;
+        }
+        .example-macs {
+            margin-top: 10px;
+            padding: 10px;
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+        }
+        .example-macs h3 {
+            margin-top: 0;
+            color: #856404;
+        }
+        .mac-button {
+            display: inline-block;
+            margin: 5px;
+            padding: 5px 10px;
+            background: #007bff;
+            color: white;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .mac-button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚑 MAC Address to Ambulance ID Test</h1>
+        
+        <div class="example-macs">
+            <h3>Quick Test (Click to use):</h3>
+            <p>These are example MAC addresses. Click to test:</p>
+            <span class="mac-button" onclick="setMAC('24:0A:C4:12:34:56')">24:0A:C4:12:34:56</span>
+            <span class="mac-button" onclick="setMAC('AA:BB:CC:DD:EE:FF')">AA:BB:CC:DD:EE:FF</span>
+            <span class="mac-button" onclick="setMAC('AABBCCDDEEFF')">AABBCCDDEEFF (No colons)</span>
+        </div>
+
+        <div class="form-group">
+            <label for="macAddress">Enter ESP32 MAC Address:</label>
+            <input type="text" id="macAddress" placeholder="e.g., 24:0A:C4:12:34:56 or 240AC4123456" value="">
+        </div>
+
+        <button onclick="testAPI()">Fetch Ambulance ID</button>
+
+        <div id="result" class="result">
+            <h3>Response:</h3>
+            <div id="resultData" class="result-data"></div>
+        </div>
+    </div>
+
+    <script>
+        function setMAC(mac) {
+            document.getElementById('macAddress').value = mac;
+        }
+
+        async function testAPI() {
+            const macAddress = document.getElementById('macAddress').value.trim();
+            const resultDiv = document.getElementById('result');
+            const resultDataDiv = document.getElementById('resultData');
+
+            if (!macAddress) {
+                alert('Please enter a MAC address');
+                return;
+            }
+
+            // Show loading
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result';
+            resultDataDiv.textContent = 'Loading...';
+
+            try {
+                const apiUrl = `api/get_ambulance_id.php?mac=${encodeURIComponent(macAddress)}`;
+                console.log('Fetching:', apiUrl);
+
+                const response = await fetch(apiUrl);
+                const data = await response.json();
+
+                console.log('Response:', data);
+
+                // Display result
+                if (data.success) {
+                    resultDiv.className = 'result success';
+                    resultDataDiv.textContent = 
+                        `✓ Success!\n\n` +
+                        `Ambulance ID: ${data.ambulance_id}\n` +
+                        `Attendar Name: ${data.attendar_name || 'N/A'}\n` +
+                        `Message: ${data.message}\n\n` +
+                        `Full Response:\n${JSON.stringify(data, null, 2)}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDataDiv.textContent = 
+                        `✗ Failed!\n\n` +
+                        `Message: ${data.message}\n` +
+                        `${data.hint ? 'Hint: ' + data.hint : ''}\n\n` +
+                        `Full Response:\n${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDataDiv.textContent = 
+                    `✗ Error!\n\n` +
+                    `Could not connect to API.\n` +
+                    `Error: ${error.message}\n\n` +
+                    `Make sure:\n` +
+                    `1. XAMPP is running\n` +
+                    `2. The API file exists at: api/get_ambulance_id.php\n` +
+                    `3. Database connection is configured`;
+            }
+        }
+
+        // Allow Enter key to submit
+        document.getElementById('macAddress').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                testAPI();
+            }
+        });
+    </script>
+</body>
+</html>

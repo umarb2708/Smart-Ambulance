@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Patient APIs</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .panel {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            grid-column: 1 / -1;
+        }
+        h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="text"],
+        input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            width: 100%;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .result.success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .result.error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background: #fff3cd;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚑 Smart Ambulance - Patient API Testing</h1>
+
+    <div class="container">
+        <!-- Check Active Patient Panel -->
+        <div class="panel">
+            <h2>1. Check Active Patient</h2>
+            <div class="info">
+                Returns the row ID of active patient (done=0) for an ambulance
+            </div>
+            
+            <div class="form-group">
+                <label>Ambulance ID:</label>
+                <input type="text" id="checkAmbulanceId" value="AMB-001">
+            </div>
+            
+            <button onclick="checkActivePatient()">Check Active Patient</button>
+            
+            <div id="checkResult" class="result"></div>
+        </div>
+
+        <!-- Update Patient Vitals Panel -->
+        <div class="panel">
+            <h2>2. Update Patient Vitals</h2>
+            <div class="info">
+                Updates sensor data for an existing patient record
+            </div>
+            
+            <div class="form-group">
+                <label>Patient Row ID:</label>
+                <input type="number" id="updateRowId" value="1">
+            </div>
+            
+            <div class="form-group">
+                <label>Temperature (°C):</label>
+                <input type="number" step="0.1" id="updateTemp" value="36.5">
+            </div>
+            
+            <div class="form-group">
+                <label>Oxygen Level (%):</label>
+                <input type="number" id="updateOxygen" value="98">
+            </div>
+            
+            <div class="form-group">
+                <label>Heart Rate (BPM):</label>
+                <input type="number" id="updateHR" value="72">
+            </div>
+            
+            <div class="form-group">
+                <label>Speed (km/h):</label>
+                <input type="number" step="0.1" id="updateSpeed" value="45.0">
+            </div>
+            
+            <button onclick="updateVitals()">Update Vitals</button>
+            
+            <div id="updateResult" class="result"></div>
+        </div>
+
+        <!-- Database Quick Actions Panel -->
+        <div class="panel">
+            <h2>3. Database Quick Actions</h2>
+            <div class="info">
+                SQL queries for testing (copy to phpMyAdmin)
+            </div>
+            
+            <h3>Create Active Patient:</h3>
+            <pre style="background:#f8f9fa; padding:10px; border-radius:5px; font-size:11px;">INSERT INTO patients 
+(ambulance_id, patient_id, patient_name, hospital, done)
+VALUES 
+('AMB-001', 'P123', 'Test Patient', 'Hospital A', 0);</pre>
+
+            <h3>Mark Patient as Done:</h3>
+            <pre style="background:#f8f9fa; padding:10px; border-radius:5px; font-size:11px;">UPDATE patients 
+SET done = 1 
+WHERE id = 1;</pre>
+
+            <h3>View Active Patients:</h3>
+            <pre style="background:#f8f9fa; padding:10px; border-radius:5px; font-size:11px;">SELECT id, ambulance_id, patient_id, 
+       patient_name, hospital, done 
+FROM patients 
+WHERE done = 0;</pre>
+        </div>
+
+        <!-- System Flow Panel -->
+        <div class="panel">
+            <h2>4. ESP32 Workflow Test</h2>
+            <div class="info">
+                Simulate ESP32 behavior
+            </div>
+            
+            <h3>Scenario 1: No Active Patient</h3>
+            <ol style="font-size:13px;">
+                <li>Ensure no patients with done=0 for AMB-001</li>
+                <li>Click "Check Active Patient"</li>
+                <li>Should return patient_row_id = 0</li>
+                <li>ESP32 shows "No Patient" on OLED</li>
+            </ol>
+
+            <h3>Scenario 2: Active Patient Found</h3>
+            <ol style="font-size:13px;">
+                <li>Create patient using SQL above</li>
+                <li>Click "Check Active Patient"</li>
+                <li>Should return patient_row_id > 0</li>
+                <li>Use that ID to "Update Vitals"</li>
+                <li>ESP32 reads sensors and uploads</li>
+            </ol>
+
+            <h3>Scenario 3: Patient Marked Done</h3>
+            <ol style="font-size:13px;">
+                <li>Mark patient as done using SQL</li>
+                <li>Try to "Update Vitals"</li>
+                <li>Should fail with "marked as done"</li>
+                <li>ESP32 stops updating, waits for new patient</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        async function checkActivePatient() {
+            const ambulanceId = document.getElementById('checkAmbulanceId').value;
+            const resultDiv = document.getElementById('checkResult');
+            
+            if (!ambulanceId) {
+                alert('Please enter ambulance ID');
+                return;
+            }
+
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result';
+            resultDiv.textContent = 'Loading...';
+
+            try {
+                const url = `api/check_active_patient.php?ambulance_id=${encodeURIComponent(ambulanceId)}`;
+                console.log('Fetching:', url);
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                console.log('Response:', data);
+
+                if (data.patient_row_id > 0) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = 
+                        `✓ Active Patient Found!\n\n` +
+                        `Patient Row ID: ${data.patient_row_id}\n` +
+                        `Patient ID: ${data.patient_id}\n` +
+                        `Patient Name: ${data.patient_name}\n` +
+                        `Hospital: ${data.hospital}\n\n` +
+                        `ESP32 will proceed to read sensors and upload vitals.\n\n` +
+                        `Full Response:\n${JSON.stringify(data, null, 2)}`;
+                    
+                    // Auto-fill update form
+                    document.getElementById('updateRowId').value = data.patient_row_id;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = 
+                        `⚠ No Active Patient\n\n` +
+                        `Message: ${data.message}\n\n` +
+                        `ESP32 will display "No Patient" and wait.\n\n` +
+                        `Full Response:\n${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = 
+                    `✗ Error!\n\n` +
+                    `${error.message}\n\n` +
+                    `Make sure XAMPP is running and API file exists.`;
+            }
+        }
+
+        async function updateVitals() {
+            const rowId = document.getElementById('updateRowId').value;
+            const temp = document.getElementById('updateTemp').value;
+            const oxygen = document.getElementById('updateOxygen').value;
+            const hr = document.getElementById('updateHR').value;
+            const speed = document.getElementById('updateSpeed').value;
+            const resultDiv = document.getElementById('updateResult');
+            
+            if (!rowId || rowId <= 0) {
+                alert('Please enter valid patient row ID');
+                return;
+            }
+
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result';
+            resultDiv.textContent = 'Uploading...';
+
+            try {
+                const formData = new FormData();
+                formData.append('patient_row_id', rowId);
+                formData.append('temperature', temp);
+                formData.append('oxygenLevel', oxygen);
+                formData.append('heartRate', hr);
+                formData.append('speed', speed);
+                formData.append('longitude', '77.5946');
+                formData.append('latitude', '12.9716');
+
+                const response = await fetch('api/update_patient_vitals.php', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                console.log('Response:', data);
+
+                if (data.success) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = 
+                        `✓ Vitals Updated Successfully!\n\n` +
+                        `Patient Row ID: ${data.patient_row_id}\n` +
+                        `Patient ID: ${data.patient_id}\n` +
+                        `Temperature: ${temp}°C\n` +
+                        `Oxygen: ${oxygen}%\n` +
+                        `Heart Rate: ${hr} BPM\n` +
+                        `Speed: ${speed} km/h\n\n` +
+                        `Full Response:\n${JSON.stringify(data, null, 2)}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = 
+                        `✗ Update Failed!\n\n` +
+                        `Message: ${data.message}\n\n` +
+                        `Full Response:\n${JSON.stringify(data, null, 2)}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = 
+                    `✗ Error!\n\n` +
+                    `${error.message}\n\n` +
+                    `Make sure XAMPP is running and API file exists.`;
+            }
+        }
+
+        // Auto-load on page load
+        window.addEventListener('load', function() {
+            console.log('Patient API Test Page Loaded');
+            console.log('APIs Available:');
+            console.log('1. check_active_patient.php - GET');
+            console.log('2. update_patient_vitals.php - POST');
+        });
+    </script>
+</body>
+</html>

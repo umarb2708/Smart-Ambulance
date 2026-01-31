@@ -19,6 +19,19 @@ define('DB_NAME', 'smart_ambulance');
 // Timezone
 date_default_timezone_set('Asia/Kolkata');
 
+// Create database connection
+$conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+
+if ($conn->connect_error) {
+    http_response_code(500);
+    die(json_encode([
+        'error' => 'Database connection failed',
+        'details' => $conn->connect_error
+    ]));
+}
+
+$conn->set_charset('utf8mb4');
+
 /**
  * Get database connection
  * @return mysqli Database connection object

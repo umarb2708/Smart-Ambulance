@@ -465,3 +465,56 @@ function answerCall() {
 
 // Stop refresh when page unloads
 window.addEventListener('beforeunload', stopAutoRefresh);
+
+/**
+ * Mark patient as reached hospital (done=1)
+ */
+function markPatientReachedHospital() {
+  if (!currentAmbulanceID) {
+    alert('No active patient found to mark as complete.');
+    return;
+  }
+  
+  // Fetch current patient to get patient_row_id
+  fetch(API_BASE + 'get_hospital_patients.php?hospital=' + currentHospitalID, {
+    credentials: 'same-origin'
+  })
+  .then(response => response.json())
+  .then(result => {
+    if (result.success && result.patients.length > 0) {
+      const patient = result.patients[0];
+      
+      if (confirm('Mark patient as reached hospital?\n\nPatient: ' + (patient.patientName || patient.patientID) + '\n\nThis will stop all updates for this patient.')) {
+        const formData = new FormData();
+        formData.append('patient_row_id', patient.id);
+        
+        fetch('../api/mark_patient_done.php', {
+          method: 'POST',
+          credentials: 'same-origin',
+          body: formData
+        })
+        .then(response => response.json())
+        .then(result => {
+          if (result.success) {
+            alert('✓ Patient successfully marked as reached hospital!\n\nPatient ID: ' + result.patient_id);
+            // Reload patient data to reflect changes
+            loadPatientData();
+          } else {
+            alert('Failed to mark patient as done:\n' + result.message);
+          }
+        })
+        .catch(error => {
+          console.error('Error marking patient as done:', error);
+          alert('An error occurred while updating patient status.');
+        });
+      }
+    } else {
+      alert('No active patient found.');
+    }
+  })
+  .catch(error => {
+    console.error('Error fetching patient data:', error);
+    alert('An error occurred while fetching patient data.');
+  });
+}
+

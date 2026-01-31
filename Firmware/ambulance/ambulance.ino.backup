@@ -1,0 +1,421 @@
+/*
+ * Smart Ambulance System - Ambulance Unit
+ * 
+ * Hardware Components:
+ * - ESP32 NodeMCU
+ * - MLX90614ESF IR Temperature Sensor (I2C)
+ * - MAX30102 Pulse Oximeter Heart Rate Sensor (I2C)
+ * - 0.96" OLED Display (I2C)
+ * - NRF24L01 RF Transceiver (SPI)
+ * - GPS Module (Serial)
+ * 
+ * Features:
+ * - Monitor patient vitals (temperature, heart rate, oxygen level)
+ * - Display Patient ID on OLED
+ * - Send data to Google Sheets via WiFi
+ * - Transmit ambulance info to traffic signals via NRF24L01
+ * - GPS location tracking
+ */
+
+#include <Wire.h>
+#include <Adafruit_MLX90614.h>
+#include <MAX30105.h>
+#include <heartRate.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <SPI.h>
+#include <nRF24L01.h>
+#include <RF24.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <TinyGPS++.h>
+
+// WiFi credentials
+const char* ssid = "Sweet Home";  // Replace with your WiFi name
+const char* password = "Umar@WIFI123#";  // Replace with your WiFi password
+
+// XAMPP PHP Server URL (Update with your PC's local IP address)
+// Find your IP: Open CMD → type 'ipconfig' → look for IPv4 Address
+const char* serverName = "http://192.168.1.11/smart-ambulance/api/upload.php";  // UPDATE THIS!
+const char* ambulanceIdAPI = "http://192.168.1.11/smart-ambulance/api/get_ambulance_id.php";  // Ambulance ID API
+
+// OLED Display settings
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// Temperature Sensor
+Adafruit_MLX90614 mlx = Adafruit_MLX90614();
+
+// Pulse Oximeter
+MAX30105 particleSensor;
+const byte RATE_SIZE = 4;
+byte rates[RATE_SIZE];
+byte rateSpot = 0;
+long lastBeat = 0;
+float beatsPerMinute;
+int beatAvg;
+
+// NRF24L01 (SPI Pins: MISO=19, MOSI=23, SCK=18, CE=4, CSN=5)
+#define CE_PIN 4
+#define CSN_PIN 5
+RF24 radio(CE_PIN, CSN_PIN);
+const byte address[6] = "00001";
+
+// GPS Module (Serial2: RX=16, TX=17)
+#define GPS_RX 16
+#define GPS_TX 17
+HardwareSerial gpsSerial(2);
+TinyGPSPlus gps;
+
+// Patient ID
+String patientID = "";
+String ambulanceID = "";  // Will be fetched from server using MAC address
+String macAddress = "";  // ESP32 MAC address
+
+// Timing variables
+unsigned long lastUploadTime = 0;
+unsigned long lastTransmitTime = 0;
+const unsigned long UPLOAD_INTERVAL = 10000; // 10 seconds
+const unsigned long TRANSMIT_INTERVAL = 5000; // 5 seconds
+
+// Sensor data
+float bodyTemp = 0.0;
+int heartRate = 0;
+int oxygenLevel = 0;  // SpO2 percentage
+
+// GPS Placeholder values (since GPS module is not connected)
+float latitude = 12.9716;   // Bangalore, India latitude
+float longitude = 77.5946;  // Bangalore, India longitude
+float ambulanceSpeed = 45.0; // Fixed speed in km/h
+
+String hospital = "Hospital 1";  // Default destination
+bool patientActive = false;
+
+void setup() {
+  Serial.begin(115200);
+  Get MAC address
+  macAddress = WiFi.macAddress();
+  Serial.print("ESP32 MAC Address: ");
+  Serial.println(macAddress);
+  
+  // 
+  // Initialize I2C
+  Wire.begin();
+  
+  // Initialize OLED
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for(;;);
+  }
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0,0);
+  display.println("Smart Ambulance");
+  display.println("Initializing...");
+  display.display();
+  
+  // Initialize Temperature Sensor
+  if (!mlx.begin()) {
+    Serial.println("MLX90614 not found!");
+    display.println("Temp sensor error");
+    display.display();
+  }
+  
+  // Initialize Pulse Oximeter
+  if (!particleSensor.begin(Wire, I2C_SPEED_FAST)) {
+    Serial.println("MAX30102 not found!");
+    display.println("Pulse ox error");
+    display.display();
+  }
+  particleSensor.setup();
+  particleSensor.setPulseAmplitudeRed(0x0A);
+  particleSensor.setPulseAmplitudeGreen(0);
+  
+  // Initialize NRF24L01
+  radio.begin();
+  radio.openWritingPipe(address);
+  radio.setPALevel(RF24_PA_MAX);
+  radio.stopListening();
+  
+  // Initialize GPS
+  gpsSerial.begin(9600, SERIAL_8N1, GPS_RX, GPS_TX);
+  
+  // Connect to WiFi
+  WiFi.begin(ssid, password);
+  display.println("Connecting WiFi...");
+  display.display();
+  
+  int wifiTimeout = 0;
+  while (WiFi.status() != WL_CONNECTED && wifiTimeout < 20) {
+    delay(500);
+    Serial.print(".");
+    wifiTimeout++;
+    display.display();
+    
+    // Fetch Ambulance ID from server using MAC address
+    fetchAmbulanceID();
+  } else {
+    Serial.println("\nWiFi Failed");
+    display.println("WiFi Failed");
+    ambulanceID = "AMB-OFFLINE";  // Fallback if WiFi not connected {
+    Serial.println("\nWiFi Connected");
+    display.println("WiFi Connected");
+  } else {
+    Serial.println("\nWiFi Failed");
+    display.println("WiFi Failed");
+  }
+  display.display();
+  delay(2000);
+  
+  // Generate Patient ID
+  generatePatientID();
+  
+  Serial.println("System Ready");
+}
+
+void loop() {
+  // GPS data is using placeholder values (defined in global variables)
+  // Uncomment below code when GPS module is connected:
+  /*
+  while (gpsSerial.available() > 0) {
+    if (gps.encode(gpsSerial.read())) {
+      if (gps.location.isValid()) {
+        latitude = gps.location.lat();
+        longitude = gps.location.lng();
+        ambulanceSpeed = gps.speed.kmph();
+      }
+    }
+  }
+  */
+  
+  // Read Temperature
+  bodyTemp = mlx.readObjectTempC();
+  
+  // Read Heart Rate and SpO2
+  long irValue = particleSensor.getIR();
+  
+  if (checkForBeat(irValue) == true) {
+    long delta = millis() - lastBeat;
+    lastBeat = millis();
+    beatsPerMinute = 60 / (delta / 1000.0);
+    
+    if (beatsPerMinute < 255 && beatsPerMinute > 20) {
+      rates[rateSpot++] = (byte)beatsPerMinute;
+      rateSpot %= RATE_SIZE;
+      
+      beatAvg = 0;
+      for (byte x = 0 ; x < RATE_SIZE ; x++)
+        beatAvg += rates[x];
+      beatAvg /= RATE_SIZE;
+      heartRate = beatAvg;
+    }
+  }
+  
+  // Calculate SpO2 (simplified - use library for accurate calculation)
+  if (irValue > 50000) {
+    oxygenLevel = 95 + random(0, 4); // Simulated for demo - use proper algorithm
+  } else {
+    oxygenLevel = 0; // No finger detected
+  }
+  
+  // Update OLED Display
+  updateDisplay();
+  
+  // Upload to Google Sheets
+  if (millis() - lastUploadTime >= UPLOAD_INTERVAL && WiFi.status() == WL_CONNECTED) {
+    uploadToSheets();
+    lastUploadTime = millis();
+  }
+  
+  // Transmit to Traffic Signals
+  if (millis() - lastTransmitTime >= TRANSMIT_INTERVAL && patientActive) {
+    transmitToTraffic();
+    lastTransmitTime = millis();
+  }
+  
+  delay(100);
+}
+
+void fetchAmbulanceID() {
+  if(WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    
+    // Remove colons from MAC address for cleaner format
+    String cleanMac = macAddress;
+    cleanMac.replace(":", "");
+    
+    // Build API URL with MAC address parameter
+    String url = String(ambulanceIdAPI) + "?mac=" + macAddress;
+    
+    Serial.println("\n--- Fetching Ambulance ID ---");
+    Serial.println("MAC Address: " + macAddress);
+    Serial.println("API URL: " + url);
+    
+    // Display fetching status
+    display.clearDisplay();
+    display.setCursor(0,0);
+    display.println("Fetching ID...");
+    display.println("MAC: " + macAddress);
+    display.display();
+    
+    // Make HTTP GET request
+    http.begin(url);
+    int httpResponseCode = http.GET();
+    
+    if (httpResponseCode == 200) {
+      String response = http.getString();
+      Serial.println("Server Response: " + response);
+      
+      // Parse JSON response (simple parsing)
+      int idStart = response.indexOf("\"ambulance_id\":\"") + 16;
+      int idEnd = response.indexOf("\"", idStart);
+      
+      if (idStart > 15 && idEnd > idStart) {
+        ambulanceID = response.substring(idStart, idEnd);
+        Serial.println("✓ Ambulance ID fetched: " + ambulanceID);
+        
+        // Display success
+        display.clearDisplay();
+        display.setCursor(0,0);
+        display.println("ID Fetched!");
+        display.println("Ambulance ID:");
+        display.setTextSize(2);
+        display.println(ambulanceID);
+        display.display();
+        delay(2000);
+      } else {
+        Serial.println("✗ Failed to parse ambulance ID");
+        ambulanceID = "AMB-ERROR";
+      }
+    } else if (httpResponseCode == 404) {
+      Serial.println("✗ MAC address not registered in database");
+      Serial.println("Please add this MAC to ambulance table: " + macAddress);
+      ambulanceID = "AMB-UNREG";
+      
+      // Display error
+      display.clearDisplay();
+      display.setCursor(0,0);
+      display.println("Not Registered!");
+      display.println("MAC: " + macAddress);
+      display.println("Add to database");
+      display.display();
+      delay(3000);
+    } else {
+      Serial.println("✗ HTTP Error: " + String(httpResponseCode));
+      ambulanceID = "AMB-ERROR";
+    }
+    
+    http.end();
+    Serial.println("--- Fetch Complete ---\n");
+  } else {
+    Serial.println("✗ WiFi not connected - Cannot fetch ID");
+    ambulanceID = "AMB-NOWIFI";
+  }
+}
+
+void generatePatientID() {
+  // Generate unique ID based on timestamp
+  patientID = "P" + String(random(100, 999));
+  Serial.println("\n=== New Patient ===");
+  Serial.println("Patient ID: " + patientID);
+  Serial.println("Ambulance ID: " + ambulanceID);
+  Serial.println("===================\n");
+}
+
+void updateDisplay() {
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(0,0);
+  
+  display.println("SMART AMBULANCE");
+  display.println("================");
+  display.print("ID: ");
+  display.println(patientID);
+  display.println();
+  display.print("Temp: ");
+  display.print(bodyTemp, 1);
+  display.println(" C");
+  display.print("HR: ");
+  display.print(heartRate);
+  display.println(" BPM");
+  display.print("SpO2: ");
+  display.print(oxygenLevel);
+  display.println(" %");
+  
+  display.display();
+}
+
+void uploadToSheets() {
+  if(WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    
+    Serial.println("\n--- Uploading Data to Server ---");
+    Serial.println("Server: " + String(serverName));
+    
+    // Initialize HTTP connection
+    http.begin(serverName);
+    http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+    
+    // Create POST data payload (matching PHP API parameters)
+    String postData = "patientID=" + patientID;
+    postData += "&temperature=" + String(bodyTemp, 1);
+    postData += "&oxygenLevel=" + String(oxygenLevel);
+    postData += "&heartRate=" + String(heartRate);
+    postData += "&ambulanceID=" + ambulanceID;
+    postData += "&speed=" + String(ambulanceSpeed, 1);
+    postData += "&longitude=" + String(longitude, 6);
+    postData += "&latitude=" + String(latitude, 6);
+    postData += "&hospital=" + hospital;
+    
+    Serial.println("Patient ID: " + patientID);
+    Serial.println("Temperature: " + String(bodyTemp, 1) + " °C");
+    Serial.println("Oxygen Level: " + String(oxygenLevel) + " %");
+    Serial.println("Heart Rate: " + String(heartRate) + " BPM");
+    Serial.println("Speed: " + String(ambulanceSpeed, 1) + " km/h");
+    Serial.println("GPS: " + String(latitude, 6) + ", " + String(longitude, 6));
+    
+    // Send POST request
+    int httpResponseCode = http.POST(postData);
+    
+    if (httpResponseCode > 0) {
+      String response = http.getString();
+      Serial.println("HTTP Response Code: " + String(httpResponseCode));
+      Serial.println("Server Response: " + response);
+      
+      // Parse JSON response
+      if (response.indexOf("\"success\":true") >= 0) {
+        Serial.println("✓ Data uploaded successfully!");
+        patientActive = true;
+      } else if (response.indexOf("\"success\":false") >= 0) {
+        Serial.println("✗ Upload failed - check server logs");
+      }
+    } else {
+      Serial.println("✗ HTTP Error: " + String(httpResponseCode));
+      Serial.println("Error: " + http.errorToString(httpResponseCode));
+    }
+    
+    http.end();
+    Serial.println("--- Upload Complete ---\n");
+  } else {
+    Serial.println("✗ WiFi not connected!");
+  }
+}
+
+void transmitToTraffic() {
+  // Create JSON-like packet for traffic signal
+  String packet = ambulanceID + "|" + hospital + "|EMERGENCY|" + String(ambulanceSpeed, 0);
+  
+  char msg[32];
+  packet.toCharArray(msg, 32);
+  
+  bool success = radio.write(&msg, sizeof(msg));
+  
+  if (success) {
+    Serial.println("Traffic signal notified");
+  } else {
+    Serial.println("Traffic transmission failed");
+  }
+}
