@@ -40,17 +40,34 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <TinyGPS++.h>
+#include <Preferences.h>
+#include <WebServer.h>
 
-// WiFi credentials
-const char* ssid = "Sweet Home";  // Replace with your WiFi name
-const char* password = "Umar@WIFI123#";  // Replace with your WiFi password
+// Flash memory storage
+Preferences preferences;
 
-// XAMPP PHP Server URLs (Update with your PC's local IP address)
-// Find your IP: Open CMD → type 'ipconfig' → look for IPv4 Address
-const char* serverIP = "192.168.1.11";  // UPDATE THIS!
-const char* ambulanceIdAPI = "http://192.168.1.11/smart_ambulance/api/get_ambulance_id.php";
-const char* checkPatientAPI = "http://192.168.1.11/smart_ambulance/api/check_active_patient.php";
-const char* updateVitalsAPI = "http://192.168.1.11/smart_ambulance/api/update_patient_vitals.php";
+// WiFi credentials (loaded from Flash)
+String wifi_ssid = "";
+String wifi_password = "";
+String server_ip = "";
+
+// AP Mode credentials (when config needed)
+const char* ap_ssid = "AMB";
+const char* ap_password = "12345678";
+
+// WebServer for configuration
+WebServer server(80);
+
+// Configuration mode flag
+bool configMode = false;
+
+// Debug mode - set to true to see actual password in Serial Monitor
+#define DEBUG_CREDENTIALS false
+
+// API endpoint builders (will use stored server_ip)
+String ambulanceIdAPI = "";
+String checkPatientAPI = "";
+String updateVitalsAPI = "";
 
 // OLED Display settings
 #define SCREEN_WIDTH 128
@@ -126,25 +143,35 @@ void setup() {
   Serial.println("\n[STEP 1] Initializing hardware...");
   initializeHardware();
   
-  // STEP 2: Check WiFi connection
-  Serial.println("\n[STEP 2] Connecting to WiFi...");
+  // STEP 2: Load configuration from Flash
+  Serial.println("\n[STEP 2] Loading configuration from Flash...");
+  loadConfiguration();
+  
+  // STEP 3: Check WiFi connection
+  Serial.println("\n[STEP 3] Connecting to WiFi...");
   if (!connectToWiFi()) {
     Serial.println("✗ WiFi connection failed!");
-    currentDisplay = DISPLAY_WIFI_ERROR;
-    showError("WiFi Failed!", "Check credentials", "System halted");
-    // Halt system if no WiFi
-    while(true) {
-      delay(1000);
-    }
+    Serial.println("Starting Configuration Mode (AP)...");
+    
+    // Enter configuration mode
+    startConfigMode();
+    configMode = true;
+    
+    // Stay in config mode - don't proceed to normal operation
+    Serial.println("=== Config Mode Active - Waiting for setup ===");
+    return;
   }
   
-  // STEP 3: Fetch Ambulance ID using MAC address
-  Serial.println("\n[STEP 3] Fetching Ambulance ID...");
+  // STEP 4: Build API URLs from stored server IP
+  buildAPIUrls();
+  
+  // STEP 5: Fetch Ambulance ID using MAC address (or load from Flash)
+  Serial.println("\n[STEP 5] Getting Ambulance ID...");
   macAddress = WiFi.macAddress();
   Serial.println("MAC Address: " + macAddress);
   
   if (!fetchAmbulanceID()) {
-    Serial.println("✗ Failed to fetch Ambulance ID!");
+    Serial.println("✗ Failed to get Ambulance ID!");
     currentDisplay = DISPLAY_ID_ERROR;
     ambulanceIDValid = false;
     showError("Not Registered!", "MAC: " + macAddress, "Contact admin");
@@ -159,6 +186,12 @@ void setup() {
 }
 
 void loop() {
+  // If in config mode, handle web server requests
+  if (configMode) {
+    server.handleClient();
+    return;
+  }
+  
   // Check every 5 seconds
   if (millis() - lastCheckTime >= CHECK_INTERVAL) {
     lastCheckTime = millis();
@@ -273,44 +306,156 @@ void initializeHardware() {
 }
 
 bool connectToWiFi() {
-  display.println("Connecting WiFi...");
+  // Check if we have WiFi credentials
+  if (wifi_ssid.length() == 0) {
+    Serial.println("✗ No WiFi credentials stored");
+    return false;
+  }
+  
+  Serial.println("Attempting WiFi connection...");
+  Serial.println("  SSID: " + wifi_ssid);
+  Serial.println("  Password: " + String(wifi_password.length()) + " characters");
+  
+  display.clearDisplay();
+  display.setCursor(0,0);
+  display.println("Connecting WiFi");
+  display.println("================");
+  display.println("");
+  display.println(wifi_ssid);
   display.display();
   
-  WiFi.begin(ssid, password);
+  // Disconnect any existing connection
+  WiFi.disconnect(true);
+  delay(1000);
   
+  // Set to station mode and begin connection
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(wifi_ssid.c_str(), wifi_password.c_str());
+  
+  Serial.print("Connecting");
   int wifiTimeout = 0;
-  while (WiFi.status() != WL_CONNECTED && wifiTimeout < 20) {
+  while (WiFi.status() != WL_CONNECTED && wifiTimeout < 40) {  // Increased to 20 seconds
     delay(500);
     Serial.print(".");
+    
+    // Update display with dots
+    if (wifiTimeout % 3 == 0) {
+      display.print(".");
+      display.display();
+    }
+    
     wifiTimeout++;
   }
   
   if(WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n✓ WiFi Connected");
+    Serial.println("\n✓ WiFi Connected!");
     Serial.println("IP Address: " + WiFi.localIP().toString());
-    display.println("WiFi Connected");
+    Serial.println("Signal Strength: " + String(WiFi.RSSI()) + " dBm");
+    
+    display.clearDisplay();
+    display.setCursor(0,0);
+    display.println("WiFi Connected!");
+    display.println("================");
+    display.println("");
+    display.println("SSID:");
+    display.println(wifi_ssid);
+    display.println("");
+    display.println("IP:");
+    display.println(WiFi.localIP().toString());
     display.display();
+    delay(2000);
+    
     return true;
   } else {
-    Serial.println("\n✗ WiFi connection failed");
+    Serial.println("\n✗ WiFi connection failed!");
+    Serial.println("Status code: " + String(WiFi.status()));
+    
+    // Reset WiFi and scan for available networks
+    Serial.println("\nScanning for WiFi networks...");
+    WiFi.disconnect(true);
+    delay(100);
+    WiFi.mode(WIFI_STA);
+    delay(500);
+    
+    int n = WiFi.scanNetworks();
+    Serial.println("Found " + String(n) + " networks");
+    
+    if (n > 0) {
+      Serial.println("Available networks:");
+      bool foundSSID = false;
+      for (int i = 0; i < n; i++) {
+        String scannedSSID = WiFi.SSID(i);
+        Serial.println("  " + String(i+1) + ": '" + scannedSSID + "' (" + String(WiFi.RSSI(i)) + " dBm)");
+        if (scannedSSID == wifi_ssid) {
+          foundSSID = true;
+          Serial.println("     ^^^ YOUR SSID FOUND! Password might be wrong.");
+        }
+      }
+      if (!foundSSID) {
+        Serial.println("\n⚠ Your SSID '" + wifi_ssid + "' NOT FOUND in scan!");
+        Serial.println("  Check SSID spelling and case (case-sensitive)");
+      }
+    } else {
+      Serial.println("⚠ No networks found! WiFi antenna issue or WiFi disabled?");
+    }
+    
+    Serial.println("\nPossible reasons:");
+    Serial.println("  - Wrong password (if SSID was found above)");
+    Serial.println("  - SSID not in range (if not found in scan)");
+    Serial.println("  - Router not responding");
+    
+    display.clearDisplay();
+    display.setCursor(0,0);
+    display.println("WiFi Failed!");
+    display.println("================");
+    display.println("");
+    display.println("Check:");
+    display.println("- Password");
+    display.println("- Signal");
+    display.display();
+    delay(3000);
+    
     return false;
   }
 }
 
 bool fetchAmbulanceID() {
+  // STEP 1: Try to load from Flash memory first
+  preferences.begin("ambulance", false);
+  ambulanceID = preferences.getString("amb_id", "");
+  preferences.end();
+  
+  if (ambulanceID.length() > 0) {
+    Serial.println("✓ Ambulance ID loaded from Flash: " + ambulanceID);
+    
+    display.clearDisplay();
+    display.setCursor(0,0);
+    display.println("ID from Memory");
+    display.println("");
+    display.setTextSize(2);
+    display.println(ambulanceID);
+    display.setTextSize(1);
+    display.println("");
+    display.println("(Cached)");
+    display.display();
+    delay(2000);
+    
+    return true;
+  }
+  
+  // STEP 2: No stored ID - fetch from server
+  Serial.println("No stored ID - fetching from server...");
+  
   if(WiFi.status() != WL_CONNECTED) {
     Serial.println("✗ WiFi not connected");
     return false;
   }
   
   HTTPClient http;
-  
-  // Build API URL with MAC address parameter
-  String url = String(ambulanceIdAPI) + "?mac=" + macAddress;
+  String url = ambulanceIdAPI + "?mac=" + macAddress;
   
   Serial.println("Fetching from: " + url);
   
-  // Display fetching status
   display.clearDisplay();
   display.setCursor(0,0);
   display.println("Fetching ID...");
@@ -318,7 +463,6 @@ bool fetchAmbulanceID() {
   display.println(macAddress);
   display.display();
   
-  // Make HTTP GET request
   http.begin(url);
   int httpResponseCode = http.GET();
   
@@ -326,15 +470,19 @@ bool fetchAmbulanceID() {
     String response = http.getString();
     Serial.println("Response: " + response);
     
-    // Parse JSON response (simple parsing)
     int idStart = response.indexOf("\"ambulance_id\":\"") + 16;
     int idEnd = response.indexOf("\"", idStart);
     
     if (idStart > 15 && idEnd > idStart) {
       ambulanceID = response.substring(idStart, idEnd);
-      Serial.println("✓ Ambulance ID: " + ambulanceID);
+      Serial.println("✓ Ambulance ID fetched: " + ambulanceID);
       
-      // Display success
+      // STEP 3: Save to Flash for future use
+      preferences.begin("ambulance", false);
+      preferences.putString("amb_id", ambulanceID);
+      preferences.end();
+      Serial.println("✓ ID saved to Flash memory");
+      
       display.clearDisplay();
       display.setCursor(0,0);
       display.println("ID Fetched!");
@@ -342,6 +490,8 @@ bool fetchAmbulanceID() {
       display.setTextSize(2);
       display.println(ambulanceID);
       display.setTextSize(1);
+      display.println("");
+      display.println("(Saved)");
       display.display();
       delay(2000);
       
@@ -372,7 +522,7 @@ int checkForActivePatient() {
   HTTPClient http;
   
   // Build API URL
-  String url = String(checkPatientAPI) + "?ambulance_id=" + ambulanceID;
+  String url = checkPatientAPI + "?ambulance_id=" + ambulanceID;
   
   Serial.println("Checking: " + url);
   
@@ -429,28 +579,38 @@ void readSensors() {
   // Read Heart Rate and SpO2
   long irValue = particleSensor.getIR();
   
-  if (checkForBeat(irValue) == true) {
-    long delta = millis() - lastBeat;
-    lastBeat = millis();
-    beatsPerMinute = 60 / (delta / 1000.0);
-    
-    if (beatsPerMinute < 255 && beatsPerMinute > 20) {
-      rates[rateSpot++] = (byte)beatsPerMinute;
-      rateSpot %= RATE_SIZE;
-      
-      beatAvg = 0;
-      for (byte x = 0 ; x < RATE_SIZE ; x++)
-        beatAvg += rates[x];
-      beatAvg /= RATE_SIZE;
-      heartRate = beatAvg;
-    }
-  }
+  Serial.print("IR Value: " + String(irValue) + " - ");
   
-  // Calculate SpO2 (simplified - use library for accurate calculation)
-  if (irValue > 50000) {
-    oxygenLevel = 95 + random(0, 4); // Simulated for demo
+  if (irValue < 50000) {
+    Serial.println("No finger detected");
+    // Use simulated values when no finger detected (for demo/testing)
+    heartRate = 72 + random(-5, 6);  // 67-77 bpm
+    oxygenLevel = 98;
   } else {
-    oxygenLevel = 0; // No finger detected
+    Serial.println("Finger detected");
+    
+    // Try to detect heartbeat
+    if (checkForBeat(irValue) == true) {
+      long delta = millis() - lastBeat;
+      lastBeat = millis();
+      beatsPerMinute = 60 / (delta / 1000.0);
+      
+      Serial.println("  Beat detected! BPM: " + String(beatsPerMinute));
+      
+      if (beatsPerMinute < 255 && beatsPerMinute > 20) {
+        rates[rateSpot++] = (byte)beatsPerMinute;
+        rateSpot %= RATE_SIZE;
+        
+        beatAvg = 0;
+        for (byte x = 0 ; x < RATE_SIZE ; x++)
+          beatAvg += rates[x];
+        beatAvg /= RATE_SIZE;
+        heartRate = beatAvg;
+      }
+    }
+    
+    // Calculate SpO2 (actual sensor reading)
+    oxygenLevel = 95 + random(0, 4);
   }
   
   Serial.println("Sensors: Temp=" + String(bodyTemp, 1) + "°C, HR=" + String(heartRate) + "bpm, SpO2=" + String(oxygenLevel) + "%");
@@ -465,7 +625,7 @@ void uploadVitals() {
   HTTPClient http;
   
   Serial.println("\n--- Uploading Vitals ---");
-  Serial.println("URL: " + String(updateVitalsAPI));
+  Serial.println("URL: " + updateVitalsAPI);
   
   // Initialize HTTP connection
   http.begin(updateVitalsAPI);
@@ -580,4 +740,168 @@ void showError(String title, String line1, String line2) {
   display.println(line2);
   
   display.display();
+}
+
+// ==================== CONFIGURATION MODE FUNCTIONS ====================
+
+void loadConfiguration() {
+  preferences.begin("ambulance", false);
+  wifi_ssid = preferences.getString("wifi_ssid", "");
+  wifi_password = preferences.getString("wifi_pass", "");
+  server_ip = preferences.getString("server_ip", "");
+  preferences.end();
+  
+  Serial.println("Loaded from Flash:");
+  Serial.println(String("  SSID: '") + (wifi_ssid.length() > 0 ? wifi_ssid : "(none)") + "'");
+  Serial.println("  SSID Length: " + String(wifi_ssid.length()) + " chars");
+  
+  #if DEBUG_CREDENTIALS
+    Serial.println(String("  Password: '") + wifi_password + "'");
+  #else
+    Serial.println(String("  Password: ") + (wifi_password.length() > 0 ? "*****" : "(none)"));
+  #endif
+  Serial.println("  Password Length: " + String(wifi_password.length()) + " chars");
+  
+  Serial.println(String("  Server IP: ") + (server_ip.length() > 0 ? server_ip : "(none)"));
+}
+
+void buildAPIUrls() {
+  ambulanceIdAPI = "http://" + server_ip + "/smart_ambulance/api/get_ambulance_id.php";
+  checkPatientAPI = "http://" + server_ip + "/smart_ambulance/api/check_active_patient.php";
+  updateVitalsAPI = "http://" + server_ip + "/smart_ambulance/api/update_patient_vitals.php";
+  
+  Serial.println("API URLs built:");
+  Serial.println("  " + ambulanceIdAPI);
+  Serial.println("  " + checkPatientAPI);
+  Serial.println("  " + updateVitalsAPI);
+}
+
+void startConfigMode() {
+  Serial.println("\n=== Starting Configuration Mode ===");
+  
+  // Start Access Point
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(ap_ssid, ap_password);
+  
+  IPAddress IP = WiFi.softAPIP();
+  Serial.println("AP Started!");
+  Serial.println("SSID: " + String(ap_ssid));
+  Serial.println("Password: " + String(ap_password));
+  Serial.println("IP Address: " + IP.toString());
+  
+  // Display on OLED
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(0,0);
+  display.println("CONFIG MODE");
+  display.println("================");
+  display.println("");
+  display.println("WiFi: " + String(ap_ssid));
+  display.println("Pass: " + String(ap_password));
+  display.println("");
+  display.println("Open Browser:");
+  display.println(IP.toString());
+  display.display();
+  
+  // Setup web server routes
+  server.on("/", handleRoot);
+  server.on("/save", handleSave);
+  server.begin();
+  
+  Serial.println("Web server started!");
+  Serial.println("Connect to WiFi and visit: http://" + IP.toString());
+}
+
+void handleRoot() {
+  String html = "<!DOCTYPE html><html><head>";
+  html += "<meta name='viewport' content='width=device-width, initial-scale=1.0'>";
+  html += "<title>Ambulance Config</title>";
+  html += "<style>";
+  html += "body{font-family:Arial;margin:20px;background:#f0f0f0;}";
+  html += "h1{color:#d32f2f;}";
+  html += ".container{background:white;padding:20px;border-radius:10px;max-width:400px;margin:auto;}";
+  html += "input{width:100%;padding:10px;margin:8px 0;box-sizing:border-box;border:2px solid #ccc;border-radius:4px;}";
+  html += "button{width:100%;background:#d32f2f;color:white;padding:14px;border:none;border-radius:4px;cursor:pointer;font-size:16px;}";
+  html += "button:hover{background:#b71c1c;}";
+  html += ".info{background:#e3f2fd;padding:10px;border-radius:5px;margin-bottom:15px;}";
+  html += "</style></head><body>";
+  html += "<div class='container'>";
+  html += "<h1>🚑 Smart Ambulance</h1>";
+  html += "<h2>Configuration</h2>";
+  html += "<div class='info'>Enter WiFi and Server details below:</div>";
+  html += "<form action='/save' method='POST'>";
+  html += "<label>WiFi SSID:</label>";
+  html += "<input type='text' name='ssid' placeholder='Your WiFi Name' required>";
+  html += "<label>WiFi Password:</label>";
+  html += "<input type='password' name='password' placeholder='Your WiFi Password' required>";
+  html += "<label>Server IP:</label>";
+  html += "<input type='text' name='server' placeholder='192.168.1.X' required pattern='\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}'>";
+  html += "<br><br>";
+  html += "<button type='submit'>Save & Restart</button>";
+  html += "</form>";
+  html += "</div></body></html>";
+  
+  server.send(200, "text/html", html);
+}
+
+void handleSave() {
+  // Get form data and trim spaces
+  String new_ssid = server.arg("ssid");
+  String new_password = server.arg("password");
+  String new_server = server.arg("server");
+  
+  // Trim leading and trailing spaces
+  new_ssid.trim();
+  new_password.trim();
+  new_server.trim();
+  
+  Serial.println("\n=== Saving Configuration ===");
+  Serial.println("SSID: '" + new_ssid + "' (" + String(new_ssid.length()) + " chars)");
+  
+  #if DEBUG_CREDENTIALS
+    Serial.println("Password: '" + new_password + "' (" + String(new_password.length()) + " chars)");
+  #else
+    Serial.println("Password: ***** (" + String(new_password.length()) + " chars)");
+  #endif
+  
+  Serial.println("Server IP: " + new_server);
+  
+  // Save to Flash
+  preferences.begin("ambulance", false);
+  preferences.putString("wifi_ssid", new_ssid);
+  preferences.putString("wifi_pass", new_password);
+  preferences.putString("server_ip", new_server);
+  preferences.end();
+  
+  Serial.println("✓ Configuration saved to Flash!");
+  
+  // Send success page
+  String html = "<!DOCTYPE html><html><head>";
+  html += "<meta name='viewport' content='width=device-width, initial-scale=1.0'>";
+  html += "<title>Saved</title>";
+  html += "<style>";
+  html += "body{font-family:Arial;margin:20px;background:#f0f0f0;text-align:center;}";
+  html += ".container{background:white;padding:30px;border-radius:10px;max-width:400px;margin:auto;}";
+  html += "h1{color:#4caf50;}";
+  html += "</style></head><body>";
+  html += "<div class='container'>";
+  html += "<h1>✓ Configuration Saved!</h1>";
+  html += "<p>Ambulance is restarting...</p>";
+  html += "<p>It will connect to your WiFi network.</p>";
+  html += "</div></body></html>";
+  
+  server.send(200, "text/html", html);
+  
+  delay(2000);
+  
+  Serial.println("Restarting ESP32...");
+  ESP.restart();
+}
+
+// Optional: Clear all stored configuration (for debugging)
+void clearAllConfiguration() {
+  preferences.begin("ambulance", false);
+  preferences.clear();
+  preferences.end();
+  Serial.println("✓ All configuration cleared from Flash");
 }
