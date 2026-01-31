@@ -64,6 +64,15 @@ $_SESSION['attendar_name'] = $ambulance['attendar_name'];
 $_SESSION['hardware_code'] = $ambulance['hardware_code'];
 $_SESSION['login_time'] = time();
 
+// Check if there's an active patient (done=0) for this ambulance
+$check_patient_sql = "SELECT id, patient_id FROM patients WHERE ambulance_id = ? AND done = 0 LIMIT 1";
+$patient_stmt = $conn->prepare($check_patient_sql);
+$patient_stmt->bind_param("s", $ambulance['ambulance_id']);
+$patient_stmt->execute();
+$patient_result = $patient_stmt->get_result();
+$has_active_patient = $patient_result->num_rows > 0;
+$patient_stmt->close();
+
 // Log login activity
 logActivity($conn, $ambulance['ambulance_id'], '', 'login', 'attendar_name', '', $ambulance['attendar_name']);
 
@@ -72,6 +81,7 @@ sendJSON([
     'message' => 'Login successful',
     'ambulance_id' => $ambulance['ambulance_id'],
     'attendar_name' => $ambulance['attendar_name'],
+    'has_active_patient' => $has_active_patient,
     'timestamp' => date('Y-m-d H:i:s')
 ]);
 

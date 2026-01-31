@@ -307,7 +307,14 @@
         loginBtn.textContent = 'Login';
 
         if (result.success) {
-          showServiceScreen(result.ambulance_id, result.attendar_name);
+          // Check if there's an active patient
+          if (result.has_active_patient) {
+            // Redirect directly to dashboard if active patient exists
+            window.location.href = 'dashboard.html';
+          } else {
+            // Show "Start Emergency Service" screen
+            showServiceScreen(result.ambulance_id, result.attendar_name);
+          }
         } else {
           errorMsg.textContent = result.message;
           errorMsg.style.display = 'block';

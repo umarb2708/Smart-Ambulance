@@ -138,15 +138,21 @@ const char* updateVitalsAPI = "http://192.168.1.XXX/smart_ambulance/api/update_p
 - Status monitoring (Normal/Warning/Critical)
 
 **API Endpoints:**
-- `get_ambulance_id.php` - Fetch ambulance ID using MAC address
-- `check_active_patient.php` - Check for active patient assignments
-- `update_patient_vitals.php` - Update sensor readings
-- `start_service.php` - Initialize patient service
-- `mark_patient_done.php` - Complete patient handover
+- `get_ambulance_id.php` - Fetch ambulance ID using MAC address (automatic registration)
+- `check_active_patient.php` - Check for active patient assignments (returns patient row ID)
+- `update_patient_vitals.php` - Update sensor readings for existing patient
+- `start_service.php` - Initialize new patient service
+- `mark_patient_done.php` - Mark patient as reached hospital (done=1)
+- `login.php` - Ambulance attendant authentication with active patient check
+- `get_patients.php` - Fetch patient data for dashboard display
 
 **Database:** MySQL (XAMPP)
 - Database Name: `smart_ambulance`
-- Main Tables: `ambulances`, `patients`, `hospitals`, `users`
+- Main Tables:
+  - `ambulance` - Stores ambulance details with MAC addresses for auto-identification
+  - `patients` - Patient records with vitals and done status (0=active, 1=completed)
+  - `hospitals` - Hospital information and credentials
+  - `users` - Ambulance attendant login credentials
 
 ---
 
@@ -285,39 +291,55 @@ Password: hospital123
 
 ### System Workflow
 
-#### A. Initial Setup Phase
+#### A. Initial Setup Phase (Runs Once on ESP32 Boot)
 
 1. **Ambulance Unit Initialization**
-   - ESP32 powers on and initializes all sensors
-   - Connects to WiFi network
-   - Retrieves Ambulance ID from server using MAC address
-   - Displays status on OLED screen
-   - Enters standby mode
+   - ESP32 powers on and initializes all sensors (MLX90614, MAX30102, OLED, NRF24L01)
+   - Connects to configured WiFi network
+   - **Automatically retrieves Ambulance ID** from server using ESP32 MAC address
+     - Sends MAC address to `get_ambulance_id.php`
+     - Server matches MAC from `ambulance` table and returns ambulance_id
+     - Supports MAC formats: colons, hyphens, underscores, or plain
+   - Displays "Ambulance ID: X" on OLED screen
+   - Enters monitoring loop (never exits unless power cycled)
 
-2. **Hospital Staff Action**
-   - Hospital staff logs into dashboard
-   - Creates new patient entry with ambulance assignment
-   - System generates unique Patient ID
-   - Patient marked as "active" (done=0)
+2. **Ambulance Attendant Action**
+   - Attendant logs into web dashboard at `http://server-ip/smart_ambulance/`
+   - If active patient exists (done=0), **auto-redirects to dashboard** (session preserved)
+   - If no active patient, shows "Start Emergency Service" button
+   - Clicks button to create new patient entry
+   - Fills patient details form (name, age, blood group, hospital destination)
+   - System creates new patient record with done=0 (active status)
 
-3. **Ambulance Receives Assignment**
-   - ESP32 polls server every 5 seconds
-   - Detects active patient assignment
-   - Displays Patient ID on OLED
-   - Begins sensor monitoring
-
-#### B. Real-Time Monitoring Phase
+3. **ESP32 Detects Assignment (Server-Driven Workflow)**
+   - **Every 5 seconds**, ESP32 ca (Active Patient Workflow)
 
 1. **Vital Signs Collection (Every 5 seconds)**
-   - MLX90614 reads body temperature
-   - MAX30102 measures heart rate and SpO2
-   - GPS captures current location and speed
-   - Data displayed on OLED
+   - MLX90614 reads body temperature (°F, accurate to ±0.5°C)
+   - MAX30102 measures heart rate (BPM) and SpO2 (%)
+   - GPS captures current location (latitude/longitude) and speed (km/h)
+   - All data displayed on OLED in real-time
 
-2. **Data Transmission**
-   - ESP32 sends sensor data to server via HTTP POST
-   - Server updates database with latest vitals
-   - Hospital dashboard auto-refreshes and displays data
+2. **Data Transmission (Server Updates)**
+   - ESP32 sends sensor data to `update_patient_vitals.php` via HTTP POST
+   - **Updates existing patient record** using patient row ID (no duplicate entries)
+   - Payload includes: temperature, oxygen_level, heart_rate, patient_row_id
+   - Server validates patient still active (done=0) before updating
+   - If patient marked done=1, ESP32 returns to "No Active Patient" state
+
+3. **Dashboard Auto-Refresh**
+   - Ambulance dashboard at `dashboard.html` auto-refreshes every 10 seconds
+   - Displays latest vitals with color-coded status:
+     - **Normal (Green):** Temperature 36.1-37.2°C, Heart 60-100 BPM, SpO2 ≥95%
+     - **Warning (Yellow):** Temperature 37.2-38°C or Heart 100-120 BPM
+     - **Critical (Red):** Temperature >38°C or <36°C, Heart >120 or <60, SpO2 <95%
+   - If no active patient detected, **auto-redirects to index.html**
+
+4. **Traffic Signal Control (RF Communication)**
+   - ESP32 transmits RF signal via NRF24L01 at 2.4GHz
+   - Message format: `"AMB-ID|Hospital|EMERGENCY|Speed"`
+   - Arduino Nano at traffic signals receives data
+   - Identifies hospital destination from messagees and displays data
    - Status calculated: Normal (green), Warning (yellow), Critical (red)
 
 3. **Traffic Signal Control**
@@ -354,23 +376,34 @@ Password: hospital123
 1. **Dashboard Display**
    - Shows all incoming ambulances
    - Patient details and vital signs
-   - Color-coded health status
-   - Estimated arrival time
-   - Real-time location map
+   - Color-coded health  (Completion Workflow)
 
-2. **Critical Alerts**
-   - Automatic highlighting of abnormal vitals
-   - Temperature > 100°F: Red alert
-   - Heart Rate > 100 or < 60: Warning
-   - SpO2 < 95%: Critical
+1. **Arrival Confirmation**
+   - Hospital staff clicks **"Patient Reached Hospital"** button in hospital dashboard
+   - System calls `mark_patient_done.php` with patient row ID
+   - Database updates: `UPDATE patients SET done=1 WHERE id=?`
+   - Patient record marked as completed
 
-3. **Video Consultation**
-   - Hospital initiates video call
-   - Uses Google Meet integration
-   - Real-time communication with ambulance staff
-   - Pre-arrival medical guidance
+2. **ESP32 Auto-Detection**
+   - On next polling cycle (within 5 seconds), ESP32 detects done=1
+   - `check_active_patient.php` returns 0 (no active patient)
+   - OLED updates to display **"No Active Patient"**
+   - Stops uploading vitals for that patient
 
-#### E. Patient Handover
+3. **Data Archival**
+   - All vitals remain logged in database with timestamps
+   - Historical records preserved for medical review
+   - Patient marked with done=1 for completed status
+   - Reports can be generated from `patients` table
+
+4. **System Reset (Auto-Return to Standby)**
+   - Ambulance dashboard redirects to index.html
+   - Attendant can start new emergency service for next patient
+   - ESP32 continues 5-second polling for new assignments
+   - Traffic signals resume normal operation
+   - System ready for next emergency
+
+**Note:** Button removed from ambulance dashboard to prevent accidental clicks during transport. Only hospital staff can mark patient as reached.
 
 1. **Arrival Confirmation**
    - Hospital staff clicks "Patient Arrived"
@@ -465,8 +498,67 @@ Password: hospital123
 
 **Sensor Not Detected:**
 - Run I2C scanner to verify addresses
-- Check SDA/SCL connections
-- Ensure common ground
+---
+
+## Recent Updates (January 2026)
+
+### 🆕 Version 2.1 - Server-Driven Workflow & MAC-Based Auto-Registration
+
+**Major Features Added:**
+
+1. **MAC Address Auto-Registration**
+   - ESP32 automatically fetches Ambulance ID using its MAC address
+   - No manual configuration needed - plug and play
+   - Server API: `get_ambulance_id.php` handles MAC lookup from `ambulance` table
+   - Supports multiple MAC formats (colons, hyphens, underscores, plain)
+
+2. **Server-Driven Patient Assignment**
+   - ESP32 polls server every 5 seconds to check for active patients
+   - No manual patient ID entry on hardware
+   - API: `check_active_patient.php` returns patient row ID if done=0
+   - Eliminates patient ID mismatch errors
+
+3. **Smart Session Management**
+   - Login automatically redirects to dashboard if active patient exists
+   - Prevents session loss from accidental browser closure
+   - Dashboard auto-redirects to index.html when patient marked done
+   - Seamless workflow without manual navigation
+
+4. **Patient Lifecycle APIs**
+   - `update_patient_vitals.php` - Updates existing patient (no duplicates)
+   - `mark_patient_done.php` - Hospital-only endpoint to mark done=1
+   - Validates patient status before updates
+   - Returns appropriate error codes for debugging
+
+5. **Enhanced Safety Features**
+   - "Patient Reached Hospital" button only in hospital dashboard
+   - Prevents accidental service termination by ambulance attendants
+   - Auto-detection of patient completion by ESP32
+   - Color-coded vital status indicators (Normal/Warning/Critical)
+
+6. **Improved ESP32 Workflow**
+   - Three-step setup: Hardware Init → WiFi → Fetch Ambulance ID
+   - Continuous loop: Check Patient → Read Sensors → Upload Vitals
+   - Displays real-time status on OLED
+   - Automatic error recovery and retry logic
+
+**Technical Improvements:**
+- Normalized MAC address comparison in SQL queries
+- Row ID-based patient updates (more reliable than patient_id)
+- Session-based authentication with active patient validation
+- Auto-refresh dashboards with real-time data sync
+- Optimized database queries with prepared statements
+
+**Bug Fixes:**
+- Fixed $conn undefined error in config.php
+- Corrected URL path from smart-ambulance to smart_ambulance
+- Fixed button alignment issues in dashboards
+- Resolved MAC address format mismatches
+
+---
+
+**Last Updated:** January 31, 2026  
+**Version:** 2.1ground
 
 **Database Connection Error:**
 - Start Apache and MySQL in XAMPP
