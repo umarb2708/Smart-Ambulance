@@ -37,8 +37,8 @@ $speed = isset($_POST['speed']) ? floatval($_POST['speed']) : 0.0;
 $longitude = isset($_POST['longitude']) ? floatval($_POST['longitude']) : 0.0;
 $latitude = isset($_POST['latitude']) ? floatval($_POST['latitude']) : 0.0;
 
-// Optional fields
-$blood_pressure = isset($_POST['blood_pressure']) ? $_POST['blood_pressure'] : '';
+// Optional fields - only update if provided
+$blood_pressure = isset($_POST['blood_pressure']) ? $_POST['blood_pressure'] : null;
 $patient_status = isset($_POST['patient_status']) ? $_POST['patient_status'] : 'Normal';
 
 try {
@@ -79,36 +79,67 @@ try {
     
     $check_stmt->close();
     
-    // Update the patient vitals
-    $update_sql = "UPDATE patients SET 
-                   temperature = ?,
-                   oxygen_level = ?,
-                   heart_rate = ?,
-                   speed = ?,
-                   longitude = ?,
-                   latitude = ?,
-                   blood_pressure = ?,
-                   patient_status = ?,
-                   updated_at = CURRENT_TIMESTAMP
-                   WHERE id = ? AND done = 0";
-    
-    $stmt = $conn->prepare($update_sql);
-    
-    if (!$stmt) {
-        throw new Exception("Update error: " . $conn->error);
+    // Build dynamic UPDATE query - only update blood_pressure if explicitly provided
+    if ($blood_pressure !== null) {
+        $update_sql = "UPDATE patients SET 
+                       temperature = ?,
+                       oxygen_level = ?,
+                       heart_rate = ?,
+                       speed = ?,
+                       longitude = ?,
+                       latitude = ?,
+                       blood_pressure = ?,
+                       patient_status = ?,
+                       updated_at = CURRENT_TIMESTAMP
+                       WHERE id = ? AND done = 0";
+        
+        $stmt = $conn->prepare($update_sql);
+        
+        if (!$stmt) {
+            throw new Exception("Update error: " . $conn->error);
+        }
+        
+        $stmt->bind_param("ddiiddssi", 
+            $temperature, 
+            $oxygenLevel, 
+            $heartRate, 
+            $speed, 
+            $longitude, 
+            $latitude,
+            $blood_pressure,
+            $patient_status,
+            $patient_row_id
+        );
+    } else {
+        // Don't update blood_pressure if not provided
+        $update_sql = "UPDATE patients SET 
+                       temperature = ?,
+                       oxygen_level = ?,
+                       heart_rate = ?,
+                       speed = ?,
+                       longitude = ?,
+                       latitude = ?,
+                       patient_status = ?,
+                       updated_at = CURRENT_TIMESTAMP
+                       WHERE id = ? AND done = 0";
+        
+        $stmt = $conn->prepare($update_sql);
+        
+        if (!$stmt) {
+            throw new Exception("Update error: " . $conn->error);
+        }
+        
+        $stmt->bind_param("ddiiddsi", 
+            $temperature, 
+            $oxygenLevel, 
+            $heartRate, 
+            $speed, 
+            $longitude, 
+            $latitude,
+            $patient_status,
+            $patient_row_id
+        );
     }
-    
-    $stmt->bind_param("ddiiddssi", 
-        $temperature, 
-        $oxygenLevel, 
-        $heartRate, 
-        $speed, 
-        $longitude, 
-        $latitude,
-        $blood_pressure,
-        $patient_status,
-        $patient_row_id
-    );
     
     if ($stmt->execute()) {
         if ($stmt->affected_rows > 0) {

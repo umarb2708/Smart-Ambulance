@@ -133,18 +133,24 @@ const char* updateVitalsAPI = "http://192.168.1.XXX/smart_ambulance/api/update_p
 **Web Dashboard Features:**
 - Real-time patient vital signs display
 - Auto-refresh every 10 seconds
-- Video call integration
+- Video call integration with hospitals
 - Patient data entry form
-- Status monitoring (Normal/Warning/Critical)
+- Status monitoring (Normal/Medium/Critical)
+- Blood pressure tracking (manual entry preserved during auto-refresh)
+- Incoming call notifications from hospitals
 
 **API Endpoints:**
 - `get_ambulance_id.php` - Fetch ambulance ID using MAC address (automatic registration)
 - `check_active_patient.php` - Check for active patient assignments (returns patient row ID)
-- `update_patient_vitals.php` - Update sensor readings for existing patient
+- `update_patient_vitals.php` - Update sensor readings (preserves manually entered fields like blood_pressure)
 - `start_service.php` - Initialize new patient service
 - `mark_patient_done.php` - Mark patient as reached hospital (done=1)
 - `login.php` - Ambulance attendant authentication with active patient check
 - `get_patients.php` - Fetch patient data for dashboard display
+- `update_patient.php` - Update individual patient fields (editable data)
+- `start_video_call.php` - Initiate video conference
+- `check_incoming_calls.php` - Check for incoming calls from hospitals
+- `update_call_status.php` - Mark call as picked up
 
 **Database:** MySQL (XAMPP)
 - Database Name: `smart_ambulance`
@@ -152,7 +158,8 @@ const char* updateVitalsAPI = "http://192.168.1.XXX/smart_ambulance/api/update_p
   - `ambulance` - Stores ambulance details with MAC addresses for auto-identification
   - `patients` - Patient records with vitals and done status (0=active, 1=completed)
   - `hospitals` - Hospital information and credentials
-  - `users` - Ambulance attendant login credentials
+  - `video_conference` - Video call tracking with call_picked status
+  - `activity_log` - Audit trail for data changes
 
 ---
 
@@ -731,6 +738,35 @@ Developed as part of Smart Healthcare IoT initiatives.
 
 ## 🐛 Troubleshooting
 
+### MySQL Database Crashes
+**Symptoms**: Error "Missing MLOG_CHECKPOINT", "InnoDB Plugin initialization aborted"
+**Solution**:
+1. Stop MySQL in XAMPP Control Panel
+2. Backup `C:\xampp\mysql\data` folder
+3. Delete `ib_logfile0`, `ib_logfile1` (and `ibdata1` if needed)
+4. Start MySQL - InnoDB will recreate log files
+5. Re-import database using `database.sql` if needed
+
+### Blood Pressure Not Saving
+**Symptoms**: Blood pressure resets to empty after auto-refresh
+**Solution**: 
+- Ensure `update_patient_vitals.php` has been updated with conditional blood_pressure update
+- Check that sensors are not sending empty blood_pressure values
+
+### Hospital Patient History Page Redirects to Login
+**Symptoms**: Clicking "View Past Patients" redirects to login page
+**Solution**:
+- Verify `check_hospital_session.php` exists in `hospital/api/` folder
+- Check API_BASE path is set to `'api/'` (not `'../api/'`)
+- Ensure hospital session is active
+
+### Video Conference Not Working
+**Symptoms**: Call button doesn't work or calls not connecting
+**Solution**:
+- Verify `video_conference` table has `call_picked` column
+- Check `start_video_call.php` and `update_call_status.php` are deployed
+- Ensure hospital has selected destination in dashboard
+
 ### ESP32 Not Connecting to WiFi
 - Check SSID and password
 - Ensure 2.4GHz WiFi network (ESP32 doesn't support 5GHz)
@@ -741,11 +777,11 @@ Developed as part of Smart Healthcare IoT initiatives.
 - Check sensor power supply (3.3V)
 - Use I2C scanner to detect sensor addresses
 
-### Data Not Uploading to Sheet
-- Verify Google Apps Script deployment URL
+### Data Not Uploading to Server
+- Verify server IP address in firmware
 - Check internet connection
-- Ensure Apps Script is deployed as "Anyone" can access
-- Check Sheet ID in Apps Script
+- Test API endpoints manually in browser
+- Check PHP error logs in `C:\xampp\apache\logs\error.log`
 
 ### NRF24L01 Communication Issues
 - Add 10µF capacitor between VCC and GND on NRF24L01
@@ -755,17 +791,25 @@ Developed as part of Smart Healthcare IoT initiatives.
 
 ### Dashboard Not Loading
 - Clear browser cache
-- Check Apps Script deployment status
-- Verify HTML files are correctly named
-- Check browser console for errors
+- Check if XAMPP Apache and MySQL are running
+- Verify files are deployed to `C:\xampp\htdocs\smart_ambulance`
+- Check browser console for JavaScript errors
+- Ensure database is properly imported
 
 ## 📊 Customization
 
+### Changing Hospital Session Check
+The system uses PHP sessions for both ambulance and hospital authentication:
+- Ambulance: `check_session.php` (sets `logged_in`, `ambulance_id`)
+- Hospital: `check_hospital_session.php` (sets `hospital_logged_in`, `hospital_id`, `hospital_name`)
+
 ### Adding More Hospitals
-In `AmbulanceForm.html` and traffic unit firmware, add hospitals:
-```html
-<option value="Hospital 5">Hospital 5</option>
+1. Insert into database:
+```sql
+INSERT INTO hospitals (hospital_id, password, name, doctor_name) 
+VALUES ('HOSP-005', 'Password123', 'City Hospital', 'Dr. Smith');
 ```
+2. Update traffic unit firmware to map hospital to direction
 
 ### Changing Refresh Rate
 In dashboard HTML files, modify:
@@ -776,14 +820,76 @@ refreshInterval = setInterval(function() {
 ```
 
 ### Adjusting Vital Status Ranges
-In Apps Script files, modify status functions:
-```javascript
-function getTemperatureStatus(temp) {
-  if (temp >= 36.1 && temp <= 37.2) return 'Normal';
-  if (temp > 37.2) return 'High';
-  return 'Low';
+In `get_patients.php`, modify status functions:
+```php
+// Temperature status
+if ($temp > 38) {
+    $tempStatus = 'High';
+} else if ($temp < 36 && $temp > 0) {
+    $tempStatus = 'Low';
 }
 ```
+
+## 🔧 Recent Updates & Fixes
+
+### Database Recovery (Feb 2026)
+- **Issue**: MySQL InnoDB crash with "Missing MLOG_CHECKPOINT" error
+- **Fix**: Delete corrupted `ib_logfile0` and `ib_logfile1`, restart MySQL to recreate
+- **Prevention**: Ensure proper MySQL shutdown, avoid force-closing XAMPP
+
+### Video Conference Enhancement
+- **Added**: `call_picked` column to `video_conference` table
+- **Purpose**: Track whether ambulance answered hospital's call
+- **Implementation**: Auto-updates when call is answered via `update_call_status.php`
+
+### Blood Pressure Persistence Fix
+- **Issue**: Blood pressure value resetting to empty on auto-refresh
+- **Root Cause**: `update_patient_vitals.php` was overwriting blood_pressure with empty string
+- **Fix**: Modified to only update blood_pressure if explicitly provided in POST data
+- **Code Change**:
+  `x] ~~Multiple patient support~~ (Implemented via patient history)
+- [ ] Advanced GPS routing with traffic integration
+- [ ] SMS/Email notifications
+- [x] ~~Historical data analytics~~ (Patient history with search/filter)
+- [ ] Integration with hospital management systems
+- [ ] Advanced ECG monitoring
+- [ ] Medication tracking
+- [x] ~~Video call integration~~ (Implemented with call status tracking)
+- [ ] Real-time chat between ambulance and hospital
+- [ ] Predictive ETA using ML
+- [ ] Multi-language support
+- [ ] Emergency protocol guidelines in dashboard
+
+---
+
+## 📍 Deployment Information
+
+**Server Requirements:**
+- XAMPP (Apache + MySQL + PHP)
+- PHP 7.4 or higher
+- MySQL 5.7 or MariaDB 10.4+
+
+**Deployment Location:** `C:\xampp\htdocs\smart_ambulance`
+
+**Access URLs:**
+- Ambulance Login: `http://localhost/smart_ambulance/index.html`
+- Ambulance Dashboard: `http://localhost/smart_ambulance/dashboard.html`
+- Hospital Login: `http://localhost/smart_ambulance/hospital/index.html`
+- Hospital Dashboard: `http://localhost/smart_ambulance/hospital/dashboard.html`
+- Patient History: `http://localhost/smart_ambulance/hospital/patient_history.html`
+
+**Database Setup:**
+1. Import `database.sql` into MySQL
+2. Default credentials:
+   - Ambulance: `AMB-001` / `Amb@123`
+   - Hospital: `HOSP-001` / `Hosp@123`history.html` - View all past patients
+- **Features**:
+  - Search by patient name, ID, or blood group
+  - Filter by patient status (Normal/Medium/Critical)
+  - Click any row to view full patient details
+  - No ambulance information shown (hospital-centric view)
+- **API**: `get_hospital_patients_history.php` - Returns all patients for logged-in hospital
+- **Access**: Button in hospital dashboard header "📋 View Past Patients"
 
 ## 📝 License
 

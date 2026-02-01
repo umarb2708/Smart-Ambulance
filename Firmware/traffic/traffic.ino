@@ -12,11 +12,11 @@
  * - Prioritize ambulance direction (green), set others to red
  * - Return to normal operation after ambulance passes
  * 
- * LED Configuration:
- * - LED 0: North Direction
- * - LED 1: East Direction
- * - LED 2: South Direction
- * - LED 3: West Direction
+ * LED Configuration (3 LEDs per direction - Red, Yellow, Green):
+ * - LEDs 0-2:   North (Red=0, Yellow=1, Green=2)
+ * - LEDs 3-5:   East  (Red=3, Yellow=4, Green=5)
+ * - LEDs 6-8:   South (Red=6, Yellow=7, Green=8)
+ * - LEDs 9-11:  West  (Red=9, Yellow=10, Green=11)
  */
 
 #include <SPI.h>
@@ -32,7 +32,7 @@ const byte address[6] = "00001";
 
 // WS2812 LED Strip
 #define LED_PIN 6
-#define NUM_LEDS 4
+#define NUM_LEDS 12  // 3 LEDs per direction (Red, Yellow, Green) x 4 directions
 Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 // Traffic light colors
@@ -40,6 +40,20 @@ Adafruit_NeoPixel strip(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 #define YELLOW strip.Color(255, 150, 0)
 #define GREEN strip.Color(0, 255, 0)
 #define OFF strip.Color(0, 0, 0)
+
+// LED indices for each direction (Red, Yellow, Green)
+#define NORTH_RED 0
+#define NORTH_YELLOW 1
+#define NORTH_GREEN 2
+#define EAST_RED 3
+#define EAST_YELLOW 4
+#define EAST_GREEN 5
+#define SOUTH_RED 6
+#define SOUTH_YELLOW 7
+#define SOUTH_GREEN 8
+#define WEST_RED 9
+#define WEST_YELLOW 10
+#define WEST_GREEN 11
 
 // Traffic directions
 enum Direction {
@@ -160,11 +174,17 @@ void enterEmergencyMode() {
   emergencyStartTime = millis();
   
   // Set ambulance direction to GREEN, all others to RED
-  for (int i = 0; i < NUM_LEDS; i++) {
-    if (i == ambulanceDirection) {
-      strip.setPixelColor(i, GREEN);
+  // Turn off all LEDs first
+  setAllLEDs(OFF);
+  
+  // Light up appropriate LEDs for each direction
+  for (int dir = 0; dir < 4; dir++) {
+    if (dir == ambulanceDirection) {
+      // Green light for ambulance direction
+      strip.setPixelColor(dir * 3 + 2, GREEN);  // Green LED
     } else {
-      strip.setPixelColor(i, RED);
+      // Red light for other directions
+      strip.setPixelColor(dir * 3, RED);  // Red LED
     }
   }
   strip.show();
@@ -213,7 +233,7 @@ void handleNormalMode() {
     if (currentTime - lastChangeTime >= YELLOW_TIME) {
       // Switch to next direction
       yellowPhase = false;
-      currentGreen = (Direction)((currentGreen + 1) % NUM_LEDS);
+      currentGreen = (Direction)((currentGreen + 1) % 4);  // Only 4 directions
       setTrafficLights(currentGreen, false);
       lastChangeTime = currentTime;
       Serial.println("Changed to direction: " + String(currentGreen));
@@ -222,15 +242,24 @@ void handleNormalMode() {
 }
 
 void setTrafficLights(Direction greenDir, bool isYellow) {
-  for (int i = 0; i < NUM_LEDS; i++) {
-    if (i == greenDir) {
+  // Turn off all LEDs first
+  setAllLEDs(OFF);
+  
+  // Light up appropriate LEDs for each direction
+  for (int dir = 0; dir < 4; dir++) {
+    int ledBase = dir * 3;  // Starting LED index for this direction
+    
+    if (dir == greenDir) {
       if (isYellow) {
-        strip.setPixelColor(i, YELLOW);
+        // Yellow light for current direction
+        strip.setPixelColor(ledBase + 1, YELLOW);  // Yellow LED
       } else {
-        strip.setPixelColor(i, GREEN);
+        // Green light for current direction
+        strip.setPixelColor(ledBase + 2, GREEN);   // Green LED
       }
     } else {
-      strip.setPixelColor(i, RED);
+      // Red light for other directions
+      strip.setPixelColor(ledBase, RED);  // Red LED
     }
   }
   strip.show();

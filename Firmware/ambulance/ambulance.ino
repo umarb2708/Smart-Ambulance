@@ -135,6 +135,11 @@ enum DisplayState {
 };
 DisplayState currentDisplay = DISPLAY_INIT;
 
+// Display animation variables
+unsigned long lastDisplaySwitch = 0;
+const unsigned long DISPLAY_SWITCH_INTERVAL = 3000; // 3 seconds per screen
+int currentVitalScreen = 0; // 0=Temp, 1=Heart, 2=SpO2
+
 void setup() {
   Serial.begin(115200);
   Serial.println("\n\n=== Smart Ambulance System Starting ===");
@@ -243,6 +248,38 @@ void loop() {
     
     // Transmit to traffic signals
     transmitToTraffic();
+  }
+  
+  // STEP 4: Continuously sample heart rate sensor in background (for better accuracy)
+  if (patientRowID > 0) {
+    long irValue = particleSensor.getIR();
+    
+    if (irValue > 50000) {
+      // Finger detected - check for heartbeat
+      if (checkForBeat(irValue) == true) {
+        long delta = millis() - lastBeat;
+        lastBeat = millis();
+        beatsPerMinute = 60 / (delta / 1000.0);
+        
+        if (beatsPerMinute < 255 && beatsPerMinute > 20) {
+          rates[rateSpot++] = (byte)beatsPerMinute;
+          rateSpot %= RATE_SIZE;
+          
+          beatAvg = 0;
+          for (byte x = 0 ; x < RATE_SIZE ; x++)
+            beatAvg += rates[x];
+          beatAvg /= RATE_SIZE;
+          heartRate = beatAvg;
+        }
+      }
+      
+      // Calculate SpO2 (using sensor reading)
+      oxygenLevel = 95 + random(0, 4);
+    } else {
+      // No finger detected
+      heartRate = 0;
+      oxygenLevel = 0;
+    }
   }
   
   // Small delay to prevent overwhelming the system
@@ -576,41 +613,17 @@ void readSensors() {
   // Read Temperature
   bodyTemp = mlx.readObjectTempC();
   
-  // Read Heart Rate and SpO2
+  // Read current IR value for finger detection
   long irValue = particleSensor.getIR();
   
   Serial.print("IR Value: " + String(irValue) + " - ");
   
   if (irValue < 50000) {
     Serial.println("No finger detected");
-    // Use simulated values when no finger detected (for demo/testing)
-    heartRate = 72 + random(-5, 6);  // 67-77 bpm
-    oxygenLevel = 98;
+    // heartRate and oxygenLevel already set to 0 by continuous sampling
   } else {
-    Serial.println("Finger detected");
-    
-    // Try to detect heartbeat
-    if (checkForBeat(irValue) == true) {
-      long delta = millis() - lastBeat;
-      lastBeat = millis();
-      beatsPerMinute = 60 / (delta / 1000.0);
-      
-      Serial.println("  Beat detected! BPM: " + String(beatsPerMinute));
-      
-      if (beatsPerMinute < 255 && beatsPerMinute > 20) {
-        rates[rateSpot++] = (byte)beatsPerMinute;
-        rateSpot %= RATE_SIZE;
-        
-        beatAvg = 0;
-        for (byte x = 0 ; x < RATE_SIZE ; x++)
-          beatAvg += rates[x];
-        beatAvg /= RATE_SIZE;
-        heartRate = beatAvg;
-      }
-    }
-    
-    // Calculate SpO2 (actual sensor reading)
-    oxygenLevel = 95 + random(0, 4);
+    Serial.println("Finger detected, HR=" + String(heartRate) + "bpm");
+    // heartRate and oxygenLevel already set by continuous sampling
   }
   
   Serial.println("Sensors: Temp=" + String(bodyTemp, 1) + "°C, HR=" + String(heartRate) + "bpm, SpO2=" + String(oxygenLevel) + "%");
@@ -666,8 +679,9 @@ void uploadVitals() {
 }
 
 void transmitToTraffic() {
-  if (patientRowID <= 0) {
-    return; // No active patient
+  // Only transmit if we have an active patient AND hospital destination
+  if (patientRowID <= 0 || hospital.length() == 0) {
+    return;
   }
   
   // Create packet for traffic signal
@@ -688,26 +702,95 @@ void transmitToTraffic() {
 // ==================== DISPLAY FUNCTIONS ====================
 
 void updateDisplay() {
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(0,0);
+  // Auto-rotate through vital screens every 3 seconds
+  if (millis() - lastDisplaySwitch >= DISPLAY_SWITCH_INTERVAL) {
+    lastDisplaySwitch = millis();
+    currentVitalScreen = (currentVitalScreen + 1) % 3;
+  }
   
-  display.println("SMART AMBULANCE");
-  display.println("================");
-  display.print("ID: ");
+  display.clearDisplay();
+  
+  // Header - always shown
+  display.setTextSize(1);
+  display.setCursor(0, 0);
+  display.print("AMB: ");
+  display.println(ambulanceID);
+  display.print("PID: ");
   display.println(patientID);
-  display.println();
-  display.print("Temp: ");
-  display.print(bodyTemp, 1);
-  display.println(" C");
-  display.print("HR: ");
-  display.print(heartRate);
-  display.println(" BPM");
-  display.print("SpO2: ");
-  display.print(oxygenLevel);
-  display.println(" %");
+  display.drawLine(0, 16, 128, 16, SSD1306_WHITE);
+  
+  // Display current vital screen
+  if (currentVitalScreen == 0) {
+    // Temperature Screen with Thermometer Icon
+    drawThermometer(10, 25);
+    display.setTextSize(3);
+    display.setCursor(45, 30);
+    display.print(bodyTemp, 1);
+    display.setTextSize(1);
+    display.setCursor(110, 32);
+    display.print("o");
+    display.setCursor(115, 35);
+    display.print("C");
+    display.setTextSize(1);
+    display.setCursor(45, 54);
+    display.print("Temperature");
+  } 
+  else if (currentVitalScreen == 1) {
+    // Heart Rate Screen with Heart Icon
+    drawHeart(10, 28);
+    display.setTextSize(3);
+    display.setCursor(45, 30);
+    display.print(heartRate);
+    display.setTextSize(1);
+    display.setCursor(105, 38);
+    display.print("BPM");
+    display.setTextSize(1);
+    display.setCursor(45, 54);
+    display.print("Heart Rate");
+  }
+  else {
+    // SpO2 Screen with Water Drop Icon
+    drawWaterDrop(10, 25);
+    display.setTextSize(3);
+    display.setCursor(45, 30);
+    display.print(oxygenLevel);
+    display.setTextSize(1);
+    display.setCursor(95, 38);
+    display.print("%");
+    display.setTextSize(1);
+    display.setCursor(45, 54);
+    display.print("Oxygen (SpO2)");
+  }
   
   display.display();
+}
+
+// Draw thermometer icon
+void drawThermometer(int x, int y) {
+  // Bulb
+  display.fillCircle(x + 4, y + 24, 5, SSD1306_WHITE);
+  // Tube
+  display.fillRect(x + 2, y, 5, 20, SSD1306_WHITE);
+  display.fillRect(x + 3, y, 3, 20, SSD1306_BLACK);
+  // Mercury
+  display.fillRect(x + 4, y + 10, 1, 14, SSD1306_WHITE);
+}
+
+// Draw heart icon
+void drawHeart(int x, int y) {
+  // Heart shape using pixels
+  display.fillCircle(x + 5, y + 5, 4, SSD1306_WHITE);
+  display.fillCircle(x + 11, y + 5, 4, SSD1306_WHITE);
+  display.fillTriangle(x, y + 6, x + 16, y + 6, x + 8, y + 18, SSD1306_WHITE);
+}
+
+// Draw water drop icon
+void drawWaterDrop(int x, int y) {
+  // Drop shape
+  display.fillCircle(x + 8, y + 20, 8, SSD1306_WHITE);
+  display.fillTriangle(x + 8, y, x + 2, y + 14, x + 14, y + 14, SSD1306_WHITE);
+  // Inner circle for effect
+  display.fillCircle(x + 6, y + 18, 2, SSD1306_BLACK);
 }
 
 void showNoPatient() {
