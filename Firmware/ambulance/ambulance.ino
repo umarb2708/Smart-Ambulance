@@ -61,6 +61,15 @@ WebServer server(80);
 // Configuration mode flag
 bool configMode = false;
 
+// Manual NRF transmission mode (for demo purposes)
+bool manualMode = false;  // false = automatic, true = manual (boot button press)
+bool manualTransmitting = false;  // Toggle flag for manual mode transmission
+#define BOOT_BUTTON 0  // GPIO 0 - Built-in BOOT button on ESP32
+bool lastButtonState = HIGH;
+bool buttonPressed = false;  // Edge detection flag
+unsigned long lastDebounceTime = 0;
+const unsigned long DEBOUNCE_DELAY = 50;
+
 // Debug mode - set to true to see actual password in Serial Monitor
 #define DEBUG_CREDENTIALS false
 
@@ -106,6 +115,7 @@ bool ambulanceIDValid = false;    // True if valid ambulance ID fetched
 int patientRowID = 0;             // Current active patient row ID (primary key)
 String patientID = "";            // Current patient ID
 String hospital = "";             // Destination hospital
+String direction = "";            // Traffic direction: NORTH, EAST, SOUTH, WEST
 
 // Timing variables
 unsigned long lastCheckTime = 0;
@@ -282,6 +292,36 @@ void loop() {
     }
   }
   
+  // STEP 5: Handle manual mode button press (toggle transmission on/off)
+  if (manualMode && patientRowID > 0) {
+    int reading = digitalRead(BOOT_BUTTON);
+    
+    // Debounce the button
+    if (reading != lastButtonState) {
+      lastDebounceTime = millis();
+    }
+    
+    if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY) {
+      // Button state is stable
+      if (reading == LOW && !buttonPressed) {
+        // Button just pressed (falling edge)
+        buttonPressed = true;
+        manualTransmitting = !manualTransmitting;  // Toggle transmission
+        
+        if (manualTransmitting) {
+          Serial.println("🟢 [MANUAL] Transmission STARTED - Sending every 5 seconds");
+        } else {
+          Serial.println("🔴 [MANUAL] Transmission STOPPED");
+        }
+      } else if (reading == HIGH && buttonPressed) {
+        // Button released
+        buttonPressed = false;
+      }
+    }
+    
+    lastButtonState = reading;
+  }
+  
   // Small delay to prevent overwhelming the system
   delay(100);
 }
@@ -338,6 +378,10 @@ void initializeHardware() {
   // Initialize GPS
   gpsSerial.begin(9600, SERIAL_8N1, GPS_RX, GPS_TX);
   Serial.println("✓ GPS serial initialized");
+  
+  // Initialize BOOT button for manual NRF transmission
+  pinMode(BOOT_BUTTON, INPUT_PULLUP);  // BOOT button (active LOW)
+  Serial.println("✓ BOOT button initialized (Manual Mode)");
   
   Serial.println("✓ All hardware initialized");
 }
@@ -594,9 +638,23 @@ int checkForActivePatient() {
         int hospEnd = response.indexOf("\"", hospStart);
         if (hospStart > 11 && hospEnd > hospStart) {
           hospital = response.substring(hospStart, hospEnd);
+          
+          // Map hospital to traffic direction
+          if (hospital.indexOf("Hospital 1") >= 0 || hospital.indexOf("hospital1") >= 0) {
+            direction = "NORTH";
+          } else if (hospital.indexOf("Hospital 2") >= 0 || hospital.indexOf("hospital2") >= 0) {
+            direction = "EAST";
+          } else if (hospital.indexOf("Hospital 3") >= 0 || hospital.indexOf("hospital3") >= 0) {
+            direction = "SOUTH";
+          } else if (hospital.indexOf("Hospital 4") >= 0 || hospital.indexOf("hospital4") >= 0) {
+            direction = "WEST";
+          } else {
+            direction = "NORTH"; // Default direction
+          }
         }
         
         Serial.println("✓ Active patient - Row ID: " + String(rowId));
+        Serial.println("  Direction: " + direction);
         http.end();
         return rowId;
       }
@@ -679,23 +737,36 @@ void uploadVitals() {
 }
 
 void transmitToTraffic() {
-  // Only transmit if we have an active patient AND hospital destination
-  if (patientRowID <= 0 || hospital.length() == 0) {
+  // Only transmit if we have an active patient AND direction
+  if (patientRowID <= 0 || direction.length() == 0) {
     return;
   }
   
-  // Create packet for traffic signal
-  String packet = ambulanceID + "|" + hospital + "|EMERGENCY|" + String(ambulanceSpeed, 0);
+  // Check if manual mode is enabled
+  if (manualMode) {
+    // Manual mode: Only transmit if toggle is ON
+    if (!manualTransmitting) {
+      return;  // Transmission is stopped, don't send
+    }
+    // If manualTransmitting is true, continue to send below
+  }
+  
+  // Send transmission (works for both automatic mode and manual mode when enabled)
+  // Create packet for traffic signal with DIRECTION
+  // Format: "AMB-ID|DIRECTION|EMERGENCY|Speed"
+  String packet = ambulanceID + "|" + direction + "|EMERGENCY|" + String(ambulanceSpeed, 0);
   
   char msg[32];
   packet.toCharArray(msg, 32);
   
   bool success = radio.write(&msg, sizeof(msg));
   
+  String modeLabel = manualMode ? "[MANUAL]" : "[AUTO]";
+  
   if (success) {
-    Serial.println("📡 Traffic signal notified: " + packet);
+    Serial.println("📡 " + modeLabel + " Traffic signal notified: " + packet);
   } else {
-    Serial.println("✗ Traffic transmission failed");
+    Serial.println("✗ " + modeLabel + " Traffic transmission failed");
   }
 }
 
@@ -716,7 +787,18 @@ void updateDisplay() {
   display.print("AMB: ");
   display.println(ambulanceID);
   display.print("PID: ");
-  display.println(patientID);
+  display.print(patientID);
+  
+  // Show mode indicator (top right)
+  if (manualMode) {
+    display.setCursor(85, 8);
+    if (manualTransmitting) {
+      display.print("[M-ON]");  // Manual mode - Transmitting
+    } else {
+      display.print("[M-OFF]");  // Manual mode - Stopped
+    }
+  }
+  
   display.drawLine(0, 16, 128, 16, SSD1306_WHITE);
   
   // Display current vital screen
@@ -806,7 +888,16 @@ void showNoPatient() {
   display.println("Patient");
   display.setTextSize(1);
   display.println("");
-  display.println("Waiting...");
+  if (manualMode) {
+    display.println("MANUAL MODE");
+    if (manualTransmitting) {
+      display.println("TX: ON");
+    } else {
+      display.println("TX: OFF");
+    }
+  } else {
+    display.println("Waiting...");
+  }
   
   display.display();
 }
@@ -920,6 +1011,13 @@ void handleRoot() {
   html += "<label>Server IP:</label>";
   html += "<input type='text' name='server' placeholder='192.168.1.X' required pattern='\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}'>";
   html += "<br><br>";
+  html += "<div style='background:#fff3cd;padding:10px;border-radius:5px;margin-bottom:15px;'>";
+  html += "<label style='font-weight:bold;'>NRF Transmission Mode (Demo):</label><br>";
+  html += "<input type='radio' id='auto' name='mode' value='auto' checked>";
+  html += "<label for='auto'> Automatic (Every 5 seconds)</label><br>";
+  html += "<input type='radio' id='manual' name='mode' value='manual'>";
+  html += "<label for='manual'> Manual (Press BOOT button)</label>";
+  html += "</div>";
   html += "<button type='submit'>Save & Restart</button>";
   html += "</form>";
   html += "</div></body></html>";
@@ -932,11 +1030,21 @@ void handleSave() {
   String new_ssid = server.arg("ssid");
   String new_password = server.arg("password");
   String new_server = server.arg("server");
+  String nrf_mode = server.arg("mode");  // Get NRF transmission mode
   
   // Trim leading and trailing spaces
   new_ssid.trim();
   new_password.trim();
   new_server.trim();
+  
+  // Set manual mode flag (NOT saved to flash - resets on restart)
+  if (nrf_mode == "manual") {
+    manualMode = true;
+    Serial.println("NRF Mode: MANUAL (BOOT button required)");
+  } else {
+    manualMode = false;
+    Serial.println("NRF Mode: AUTOMATIC (every 5 seconds)");
+  }
   
   Serial.println("\n=== Saving Configuration ===");
   Serial.println("SSID: '" + new_ssid + "' (" + String(new_ssid.length()) + " chars)");

@@ -141,27 +141,37 @@ void loop() {
 }
 
 void processEmergencySignal(String message) {
-  // Extract hospital destination to determine direction
-  int hospitalStart = message.indexOf('|') + 1;
-  int hospitalEnd = message.indexOf('|', hospitalStart);
-  String hospital = message.substring(hospitalStart, hospitalEnd);
+  // Extract direction from message
+  // Message format: "AMB-ID|DIRECTION|EMERGENCY|Speed"
+  // Example: "AMB-1|NORTH|EMERGENCY|54"
   
-  // Map hospital to direction (customize based on your setup)
-  // Example: Hospital 1 = North, Hospital 2 = East, etc.
-  if (hospital.indexOf("Hospital 1") >= 0) {
+  int dirStart = message.indexOf('|') + 1;
+  int dirEnd = message.indexOf('|', dirStart);
+  String receivedDirection = message.substring(dirStart, dirEnd);
+  receivedDirection.trim();
+  receivedDirection.toUpperCase();
+  
+  Serial.println("Received Direction: " + receivedDirection);
+  
+  // Map direction string to Direction enum
+  if (receivedDirection == "NORTH") {
     ambulanceDirection = NORTH;
-  } else if (hospital.indexOf("Hospital 2") >= 0) {
+  } else if (receivedDirection == "EAST") {
     ambulanceDirection = EAST;
-  } else if (hospital.indexOf("Hospital 3") >= 0) {
+  } else if (receivedDirection == "SOUTH") {
     ambulanceDirection = SOUTH;
-  } else if (hospital.indexOf("Hospital 4") >= 0) {
+  } else if (receivedDirection == "WEST") {
     ambulanceDirection = WEST;
+  } else {
+    // Unknown direction, default to NORTH
+    ambulanceDirection = NORTH;
+    Serial.println("Unknown direction, defaulting to NORTH");
   }
   
   // Switch to emergency mode
-  if (currentState != EMERGENCY_MODE || hospital != lastHospitalReceived) {
+  if (currentState != EMERGENCY_MODE || receivedDirection != lastHospitalReceived) {
     Serial.println("EMERGENCY MODE ACTIVATED - Direction: " + String(ambulanceDirection));
-    lastHospitalReceived = hospital;
+    lastHospitalReceived = receivedDirection;
     enterEmergencyMode();
   }
   
