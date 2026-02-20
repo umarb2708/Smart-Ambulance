@@ -73,10 +73,20 @@ TrafficState currentState = NORMAL_MODE;
 Direction currentGreen = NORTH;
 Direction ambulanceDirection = NORTH;
 
+// Save state before emergency mode
+Direction preEmergencyDirection = NORTH;
+bool preEmergencyYellowPhase = false;
+unsigned long preEmergencyElapsedTime = 0;
+
+// Emergency transition phase
+bool emergencyTransitionPhase = false;
+unsigned long emergencyTransitionStartTime = 0;
+
 unsigned long lastChangeTime = 0;
 unsigned long emergencyStartTime = 0;
 const unsigned long NORMAL_GREEN_TIME = 15000; // 15 seconds per direction
 const unsigned long YELLOW_TIME = 3000; // 3 seconds yellow
+const unsigned long EMERGENCY_TRANSITION_TIME = 3000; // 3 seconds yellow transition for emergency
 const unsigned long EMERGENCY_DURATION = 30000; // 30 seconds emergency mode
 const unsigned long EMERGENCY_CHECK_INTERVAL = 10000; // Check for new ambulance data every 10 sec
 
@@ -180,11 +190,48 @@ void processEmergencySignal(String message) {
 }
 
 void enterEmergencyMode() {
+  // Save current normal mode state
+  preEmergencyDirection = currentGreen;
+  preEmergencyYellowPhase = yellowPhase;
+  preEmergencyElapsedTime = millis() - lastChangeTime;
+  
   currentState = EMERGENCY_MODE;
   emergencyStartTime = millis();
   
+  // Check if ambulance is approaching from the current green direction
+  if (ambulanceDirection == currentGreen) {
+    // Same direction - skip yellow transition, keep green and set others to red
+    emergencyTransitionPhase = false;
+    activateEmergencyLights();
+    Serial.println("Ambulance on same green direction - No transition needed");
+  } else {
+    // Different direction - use yellow transition phase
+    emergencyTransitionPhase = true;
+    emergencyTransitionStartTime = millis();
+    
+    // Set only current green direction and ambulance direction to YELLOW
+    // Others remain RED
+    setAllLEDs(OFF);
+    
+    for (int dir = 0; dir < 4; dir++) {
+      int ledBase = dir * 3;
+      
+      if (dir == currentGreen || dir == ambulanceDirection) {
+        // Yellow warning for directions that will change
+        strip.setPixelColor(ledBase + 1, YELLOW);  // Yellow LED
+      } else {
+        // Red for other directions
+        strip.setPixelColor(ledBase, RED);  // Red LED
+      }
+    }
+    strip.show();
+    
+    Serial.println("Emergency transition - Yellow at: " + String(currentGreen) + " and " + String(ambulanceDirection));
+  }
+}
+
+void activateEmergencyLights() {
   // Set ambulance direction to GREEN, all others to RED
-  // Turn off all LEDs first
   setAllLEDs(OFF);
   
   // Light up appropriate LEDs for each direction
@@ -199,10 +246,20 @@ void enterEmergencyMode() {
   }
   strip.show();
   
-  Serial.println("Emergency lights activated");
+  Serial.println("Emergency lights activated - Direction: " + String(ambulanceDirection));
 }
 
 void handleEmergencyMode() {
+  // Handle emergency transition phase (yellow warning)
+  if (emergencyTransitionPhase) {
+    if (millis() - emergencyTransitionStartTime >= EMERGENCY_TRANSITION_TIME) {
+      // Transition complete, activate emergency lights
+      emergencyTransitionPhase = false;
+      activateEmergencyLights();
+    }
+    return;
+  }
+  
   // Check if emergency duration has expired
   if (millis() - emergencyStartTime >= EMERGENCY_DURATION) {
     Serial.println("Emergency mode timeout - Returning to normal");
@@ -216,7 +273,15 @@ void handleEmergencyMode() {
 void exitEmergencyMode() {
   currentState = NORMAL_MODE;
   lastHospitalReceived = "";
-  startNormalMode();
+  emergencyTransitionPhase = false;
+  
+  // Restore pre-emergency state
+  currentGreen = preEmergencyDirection;
+  yellowPhase = preEmergencyYellowPhase;
+  lastChangeTime = millis() - preEmergencyElapsedTime;
+  
+  setTrafficLights(currentGreen, yellowPhase);
+  Serial.println("Resumed normal mode at direction: " + String(currentGreen));
 }
 
 void startNormalMode() {
